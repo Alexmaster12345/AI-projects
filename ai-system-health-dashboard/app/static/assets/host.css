@@ -100,18 +100,27 @@
   justify-self: end;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.10);
 }
 
 .pMetric.ok {
   color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+  background: color-mix(in srgb, var(--ok) 10%, rgba(0,0,0,0.10));
 }
 
 .pMetric.crit {
   color: var(--crit);
+  border-color: color-mix(in srgb, var(--crit) 34%, transparent);
+  background: color-mix(in srgb, var(--crit) 10%, rgba(0,0,0,0.10));
 }
 
 .pMetric.unknown {
   color: color-mix(in srgb, var(--text) 55%, transparent);
+  border-color: rgba(255,255,255,0.06);
 }
 
 /* Status badge coloring reused from dashboard vocab */
@@ -121,6 +130,19 @@
 
 #hStatus.crit {
   color: var(--crit);
+}
+
+/* Color value fields on the host page based on severity (JS applies ok/crit/unknown). */
+.hostWrap .v.ok {
+  color: var(--ok);
+}
+
+.hostWrap .v.crit {
+  color: var(--crit);
+}
+
+.hostWrap .v.unknown {
+  color: color-mix(in srgb, var(--text) 70%, transparent);
 }
 
 @media (max-width: 980px) {

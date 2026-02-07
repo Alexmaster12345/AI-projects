@@ -106,6 +106,19 @@
     return parts.join(' · ');
   }
 
+  function applyInlineProtoStyle(el, cls) {
+    // Hard fallback colors so status remains readable even if CSS variables
+    // or additional styles fail to load.
+    if (!el) return;
+    try {
+      if (cls === 'ok') el.style.color = '#55ffa6';
+      else if (cls === 'crit') el.style.color = '#ff4d6d';
+      else el.style.color = 'rgba(233, 249, 255, 0.62)';
+    } catch (_) {
+      // ignore
+    }
+  }
+
   function applyChecks(checks) {
     const c = checks && typeof checks === 'object' ? checks : {};
 
@@ -121,7 +134,9 @@
       if (!el) continue;
       const st = c[key] || null;
       el.classList.remove('ok', 'crit', 'unknown');
-      el.classList.add(sevClass(st));
+      const cls = sevClass(st);
+      el.classList.add(cls);
+      applyInlineProtoStyle(el, cls);
       el.textContent = fmtProto(st);
       try {
         el.title = (st && st.checked_ts != null) ? `Last check: ${fmtTs(st.checked_ts)}` : '';
@@ -183,6 +198,13 @@
     const sev = normalizeSev(st);
     els.status.classList.remove('ok', 'crit');
     els.status.classList.add(sev);
+
+    // Color adjacent fields consistently with reachability.
+    for (const el of [els.latency, els.checked, els.msg]) {
+      if (!el) continue;
+      el.classList.remove('ok', 'crit', 'unknown');
+      el.classList.add(sev);
+    }
 
     setText(els.status, sev === 'ok' ? 'OK' : 'ISSUE');
     setText(els.latency, st && st.latency_ms != null ? `${Math.round(Number(st.latency_ms))} ms` : '—');

@@ -99,7 +99,106 @@
   // --- Host status buttons (command bar) ---
   let hostInventory = [];
   let hostStatuses = {}; // { [id]: {status, checked_ts, latency_ms, message} }
+  let hostChecks = {}; // { [id]: { icmp, ssh, dns, snmp, ntp, ... } }
   let pendingFocusHostId = null;
+  let hostsListCache = []; // last rendered hosts list (for live row updates)
+
+  const PROTO_LABELS = {
+    icmp: 'ICMP',
+    ssh: 'SSH',
+    dns: 'DNS',
+    snmp: 'SNMP',
+    ntp: 'NTP',
+  };
+
+  function toLowerStatus(st) {
+    try {
+      return (st && st.status ? String(st.status) : 'unknown').toLowerCase();
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
+  function hasCriticalProtocol(checks) {
+    if (!checks || typeof checks !== 'object') return false;
+    for (const k of Object.keys(PROTO_LABELS)) {
+      const s = toLowerStatus(checks[k]);
+      if (s === 'crit') return true;
+    }
+    return false;
+  }
+
+  function summarizeCriticalProtocols(checks) {
+    const out = [];
+    if (!checks || typeof checks !== 'object') return out;
+    for (const k of Object.keys(PROTO_LABELS)) {
+      const st = checks[k] || null;
+      const s = toLowerStatus(st);
+      if (s !== 'crit') continue;
+      const msg = st && st.message ? String(st.message).trim() : '';
+      out.push({ key: k, label: PROTO_LABELS[k], message: msg });
+    }
+    return out;
+  }
+
+  function sevFromProtoStatus(st) {
+    const s = toLowerStatus(st);
+    if (s === 'ok') return 'ok';
+    if (s === 'crit') return 'crit';
+    return 'unknown';
+  }
+
+  function shortProtoLabel(st) {
+    const s = toLowerStatus(st);
+    if (s === 'ok') return 'OK';
+    if (s === 'crit') return 'CRIT';
+    return 'UNK';
+  }
+
+  function renderProtoChipsInto(td, checks) {
+    td.innerHTML = '';
+    td.classList.add('hostsProto');
+
+    const c = checks && typeof checks === 'object' ? checks : null;
+    if (!c) {
+      td.textContent = '—';
+      return;
+    }
+
+    const keys = ['icmp', 'ssh', 'snmp', 'ntp', 'dns'];
+    for (const k of keys) {
+      const st = c[k] || null;
+      const sev = sevFromProtoStatus(st);
+      const chip = document.createElement('span');
+      chip.className = `hostsProtoChip ${sev}`;
+      chip.textContent = `${PROTO_LABELS[k] || k.toUpperCase()} ${shortProtoLabel(st)}`;
+      try {
+        const msg = st && st.message ? String(st.message).trim() : '';
+        const lat = st && st.latency_ms != null ? `${Math.round(Number(st.latency_ms))} ms` : '';
+        const titleParts = [];
+        titleParts.push(`${PROTO_LABELS[k] || k.toUpperCase()}: ${toLowerStatus(st).toUpperCase()}`);
+        if (lat) titleParts.push(lat);
+        if (msg) titleParts.push(msg);
+        chip.title = titleParts.join(' · ');
+      } catch (_) {
+        // ignore
+      }
+      td.appendChild(chip);
+    }
+  }
+
+  function updateHostsProtocolsLive() {
+    if (!els.hostsTbody) return;
+    const rows = els.hostsTbody.querySelectorAll('tr[data-host-id]');
+    for (const row of rows) {
+      const hostId = row.getAttribute('data-host-id');
+      if (!hostId) continue;
+      const td = row.querySelector('td.hostsProto');
+      if (!td) continue;
+      const checks = hostChecks ? hostChecks[String(hostId)] || hostChecks[hostId] : null;
+      renderProtoChipsInto(td, checks);
+    }
+  }
 
   function normalizeStatus(st) {
     const s = (st && st.status ? String(st.status) : 'unknown').toLowerCase();
@@ -123,7 +222,9 @@
       const name = (h && h.name) || (h && h.address) || `host-${String(id)}`;
 
       const raw = hostStatuses ? hostStatuses[String(id)] || hostStatuses[id] : null;
-      const sev = normalizeStatus(raw);
+      const checks = hostChecks ? hostChecks[String(id)] || hostChecks[id] : null;
+      // Treat any critical protocol as an issue for the dashboard summary.
+      const sev = (normalizeStatus(raw) === 'ok' && !hasCriticalProtocol(checks)) ? 'ok' : 'crit';
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -132,6 +233,12 @@
       const tipParts = [];
       if (raw && raw.message) tipParts.push(String(raw.message));
       if (raw && raw.latency_ms != null) tipParts.push(`${Math.round(Number(raw.latency_ms))} ms`);
+      const crits = summarizeCriticalProtocols(checks);
+      if (crits.length) {
+        tipParts.push(`Protocols: ${crits.map((c) => c.label).join(', ')}`);
+        // Include the first message as a hint (avoid huge tooltips).
+        if (crits[0].message) tipParts.push(crits[0].message.slice(0, 160));
+      }
       btn.title = tipParts.join(' · ') || (sev === 'ok' ? 'OK' : 'Issue');
       btn.setAttribute('aria-label', `${name}: ${sev === 'ok' ? 'ok' : 'issue'}`);
 
@@ -182,7 +289,9 @@
     try {
       const r = await fetchJson('/api/hosts/status');
       hostStatuses = (r && r.statuses && typeof r.statuses === 'object') ? r.statuses : {};
+      hostChecks = (r && r.checks && typeof r.checks === 'object') ? r.checks : {};
       renderHostButtons();
+      updateHostsProtocolsLive();
     } catch (_) {
       // ignore; WS may deliver statuses.
     }
@@ -256,6 +365,7 @@
 
   function renderHosts(hosts) {
     const list = Array.isArray(hosts) ? hosts : [];
+    hostsListCache = list;
     els.hostsTbody.innerHTML = '';
 
     if (!list.length) {
@@ -311,6 +421,15 @@
       const tdNotes = document.createElement('td');
       tdNotes.textContent = notes || '—';
 
+      const tdProto = document.createElement('td');
+      tdProto.className = 'hostsProto';
+      if (hostId) {
+        const checks = hostChecks ? hostChecks[String(hostId)] || hostChecks[hostId] : null;
+        renderProtoChipsInto(tdProto, checks);
+      } else {
+        tdProto.textContent = '—';
+      }
+
       const tdAct = document.createElement('td');
 
       if (hostId) {
@@ -342,6 +461,7 @@
       tr.appendChild(tdAddr);
       tr.appendChild(tdType);
       tr.appendChild(tdTags);
+      tr.appendChild(tdProto);
       tr.appendChild(tdNotes);
       tr.appendChild(tdAct);
       els.hostsTbody.appendChild(tr);
@@ -1537,7 +1657,9 @@
           render(msg.sample, msg.insights);
         } else if (msg.type === 'host_status') {
           hostStatuses = (msg && msg.statuses && typeof msg.statuses === 'object') ? msg.statuses : {};
+          hostChecks = (msg && msg.checks && typeof msg.checks === 'object') ? msg.checks : {};
           renderHostButtons();
+          updateHostsProtocolsLive();
         }
       } catch (_) {
         // ignore

@@ -313,7 +313,14 @@ async def configuration_page() -> Any:
 async def host_page(host_id: int) -> Any:
     # host_id is used by the frontend JS; keep the HTML static.
     with open("app/static/host.html", "r", encoding="utf-8") as f:
-        return f.read()
+        return HTMLResponse(
+            f.read(),
+            headers={
+                # The page itself references versioned assets, but browsers may
+                # still cache HTML aggressively; prevent stale asset URLs.
+                "Cache-Control": "no-store",
+            },
+        )
 
 
 @app.get("/api/metrics/latest")
@@ -454,7 +461,12 @@ async def api_host(host_id: int) -> Any:
 async def api_hosts_status() -> Any:
     # Auth is handled by middleware.
     async with _host_status_lock:
-        return {"ts": float(_host_status_ts), "statuses": dict(_host_status)}
+        return {
+            "ts": float(_host_status_ts),
+            "statuses": dict(_host_status),
+            "checks_ts": float(_host_checks_ts),
+            "checks": dict(_host_checks),
+        }
 
 
 @app.get("/api/hosts/{host_id}/status")
@@ -828,6 +840,26 @@ async def _host_checker_loop() -> None:
             def _add_event(level: str, message: str) -> None:
                 events.append({"type": "log", "ts": float(ts), "level": str(level), "message": str(message)})
 
+            def _detail_line(proto_dump: Any) -> str:
+                """Best-effort human detail for a ProtocolStatus model_dump()."""
+                try:
+                    if not isinstance(proto_dump, dict):
+                        return ""
+                    msg = str(proto_dump.get("message") or "").strip()
+                    lat = proto_dump.get("latency_ms")
+                    parts: list[str] = []
+                    if msg:
+                        # Avoid gigantic lines.
+                        parts.append(msg[:180])
+                    if lat is not None:
+                        try:
+                            parts.append(f"{int(round(float(lat)))} ms")
+                        except Exception:
+                            pass
+                    return " · ".join(parts)
+                except Exception:
+                    return ""
+
             for hid, st in results.items():
                 name = host_name_by_id.get(int(hid), f"host-{hid}")
                 new_icmp = _norm_status((st or {}).get("status"))
@@ -835,7 +867,9 @@ async def _host_checker_loop() -> None:
 
                 # ICMP: log both failure + recovery.
                 if prev_icmp != "crit" and new_icmp == "crit":
-                    _add_event("CRIT", f"Host {name} unreachable (ICMP)")
+                    detail = _detail_line(st)
+                    suffix = f": {detail}" if detail else ""
+                    _add_event("CRIT", f"Host {name} unreachable (ICMP){suffix}")
                 elif prev_icmp == "crit" and new_icmp == "ok":
                     _add_event("INFO", f"Host {name} reachable (ICMP)")
 
@@ -851,7 +885,9 @@ async def _host_checker_loop() -> None:
                     new_p = _norm_status((new_host_checks.get(proto_key) or {}).get("status"))
                     prev_p = _norm_status((prev_host_checks.get(proto_key) or {}).get("status"))
                     if prev_p != "crit" and new_p == "crit":
-                        _add_event("CRIT", f"Host {name} {proto_label} check failed")
+                        detail = _detail_line(new_host_checks.get(proto_key) or {})
+                        suffix = f": {detail}" if detail else ""
+                        _add_event("CRIT", f"Host {name} {proto_label} check failed{suffix}")
 
             async with _host_status_lock:
                 _host_status_ts = ts

@@ -470,6 +470,41 @@ body[data-view="maps"] #mapsView { display: block; }
   cursor: pointer;
 }
 
+/* Hosts table: live protocol chips */
+.hostsProto {
+  white-space: nowrap;
+}
+
+.hostsProtoChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  margin: 2px 6px 2px 0;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.10);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.hostsProtoChip.ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 28%, transparent);
+  background: color-mix(in srgb, var(--ok) 10%, rgba(0,0,0,0.10));
+}
+
+.hostsProtoChip.crit {
+  color: var(--crit);
+  border-color: color-mix(in srgb, var(--crit) 32%, transparent);
+  background: color-mix(in srgb, var(--crit) 10%, rgba(0,0,0,0.10));
+}
+
+.hostsProtoChip.unknown {
+  color: color-mix(in srgb, var(--text) 70%, transparent);
+}
+
 .hostsBtnSmall:hover {
   border-color: rgba(255,255,255,0.20);
   background: rgba(255,255,255,0.05);
