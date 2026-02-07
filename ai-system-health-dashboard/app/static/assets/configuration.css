@@ -1,0 +1,95 @@
+/* Configuration page styles (separate page). */
+
+.cfgWrap {
+  width: min(var(--container-width), 1200px);
+  margin: 0 auto;
+  padding: var(--frame-pad-y) var(--frame-pad-x);
+}
+
+.cfgHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.cfgTitle {
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  font-size: 20px;
+}
+
+.cfgSub {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.cfgBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.25);
+  font-size: 12px;
+  color: rgba(233, 249, 255, 0.86);
+}
+
+.cfgBadge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(110,231,255,0.12);
+}
+
+.cfgBadge .sep { opacity: 0.6; }
+
+.cfgGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--grid-gap);
+}
+
+@media (max-width: 980px) {
+  .cfgGrid { grid-template-columns: 1fr; }
+}
+
+.cfgKv {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.cfgKvRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.18);
+}
+
+.cfgKvRow .k { color: var(--muted); font-size: 12px; letter-spacing: 0.2px; }
+.cfgKvRow .v { font-weight: 800; font-size: 12px; }
+
+.cfgSmall {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.cfgPre {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
+  max-height: 320px;
+  overflow: auto;
+  font-size: 12px;
+  color: rgba(233, 249, 255, 0.86);
+}

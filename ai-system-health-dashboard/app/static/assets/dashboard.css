@@ -420,6 +420,28 @@ body[data-view="maps"] #mapsView { display: block; }
   vertical-align: top;
 }
 
+.hostsLink {
+  color: color-mix(in srgb, var(--accent) 78%, var(--text));
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.hostsLink:hover {
+  text-decoration: underline;
+}
+
+.hostsTable td:last-child {
+  white-space: nowrap;
+}
+
+.hostsTable tr.hostsRowFocus td {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.hostsTable tr.hostsRowFocus td:first-child {
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
 .hostsTable th {
   text-align: left;
   color: var(--muted);
@@ -1037,8 +1059,51 @@ header {
   background: rgba(0,0,0,0.22);
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
   align-items: center;
   padding: 10px 12px;
+}
+
+.hostButtons {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.hostBtn {
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 11px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+}
+
+.hostBtn.ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 55%, rgba(255,255,255,0.10));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 16%, transparent);
+}
+
+.hostBtn.crit {
+  color: var(--crit);
+  border-color: color-mix(in srgb, var(--crit) 55%, rgba(255,255,255,0.10));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--crit) 16%, transparent);
+}
+
+.hostBtn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.hostBtn:hover {
+  background: rgba(255,255,255,0.06);
 }
 
 .prompt {

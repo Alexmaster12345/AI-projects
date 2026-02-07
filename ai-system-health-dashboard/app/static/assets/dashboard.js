@@ -63,6 +63,8 @@
 
     cmd: $('cmd'),
 
+    hostButtons: $('hostButtons'),
+
     cpuSpark: $('cpuSpark'),
     memSpark: $('memSpark'),
     diskSpark: $('diskSpark'),
@@ -93,6 +95,107 @@
     mapMenuGoHosts: $('mapMenuGoHosts'),
     mapMenuCopyAddr: $('mapMenuCopyAddr'),
   };
+
+  // --- Host status buttons (command bar) ---
+  let hostInventory = [];
+  let hostStatuses = {}; // { [id]: {status, checked_ts, latency_ms, message} }
+  let pendingFocusHostId = null;
+
+  function normalizeStatus(st) {
+    const s = (st && st.status ? String(st.status) : 'unknown').toLowerCase();
+    // Requirement: green when no problems, red when issues.
+    return s === 'ok' ? 'ok' : 'crit';
+  }
+
+  function renderHostButtons() {
+    if (!els.hostButtons) return;
+    const list = Array.isArray(hostInventory) ? hostInventory : [];
+    els.hostButtons.innerHTML = '';
+
+    if (!list.length) {
+      // Keep the bar compact when there are no hosts.
+      return;
+    }
+
+    for (const h of list) {
+      const id = h && h.id;
+      if (id == null) continue;
+      const name = (h && h.name) || (h && h.address) || `host-${String(id)}`;
+
+      const raw = hostStatuses ? hostStatuses[String(id)] || hostStatuses[id] : null;
+      const sev = normalizeStatus(raw);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `hostBtn ${sev}`;
+      btn.textContent = String(name);
+      const tipParts = [];
+      if (raw && raw.message) tipParts.push(String(raw.message));
+      if (raw && raw.latency_ms != null) tipParts.push(`${Math.round(Number(raw.latency_ms))} ms`);
+      btn.title = tipParts.join(' · ') || (sev === 'ok' ? 'OK' : 'Issue');
+      btn.setAttribute('aria-label', `${name}: ${sev === 'ok' ? 'ok' : 'issue'}`);
+
+      btn.addEventListener('click', () => {
+        try {
+          location.href = `/host/${encodeURIComponent(String(id))}`;
+        } catch (_) {
+          // ignore
+        }
+      });
+      els.hostButtons.appendChild(btn);
+    }
+  }
+
+  function focusHostRow(hostId) {
+    if (!hostId) return;
+    const idStr = String(hostId);
+    const row = els.hostsTbody ? els.hostsTbody.querySelector(`tr[data-host-id="${CSS.escape(idStr)}"]`) : null;
+    if (!row) return;
+
+    try {
+      row.classList.add('hostsRowFocus');
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      setTimeout(() => {
+        try {
+          row.classList.remove('hostsRowFocus');
+        } catch (_) {
+          // ignore
+        }
+      }, 2200);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  async function refreshHostButtonsInventory() {
+    try {
+      const hosts = await fetchJson('/api/hosts');
+      hostInventory = Array.isArray(hosts) ? hosts : [];
+      renderHostButtons();
+    } catch (_) {
+      hostInventory = [];
+      renderHostButtons();
+    }
+  }
+
+  async function refreshHostButtonsStatusOnce() {
+    try {
+      const r = await fetchJson('/api/hosts/status');
+      hostStatuses = (r && r.statuses && typeof r.statuses === 'object') ? r.statuses : {};
+      renderHostButtons();
+    } catch (_) {
+      // ignore; WS may deliver statuses.
+    }
+  }
+
+  function setupHostButtons() {
+    refreshHostButtonsInventory();
+    refreshHostButtonsStatusOnce();
+    // Keep inventory fresh (new hosts / deletes).
+    setInterval(refreshHostButtonsInventory, 60_000);
+    // Fallback status poll in case WS is blocked; host checker runs server-side.
+    setInterval(refreshHostButtonsStatusOnce, 20_000);
+  }
 
   function setView(view) {
     document.body.dataset.view = view || 'dashboard';
@@ -163,6 +266,11 @@
 
     for (const h of list) {
       const tr = document.createElement('tr');
+      try {
+        if (h && h.id != null) tr.setAttribute('data-host-id', String(h.id));
+      } catch (_) {
+        // ignore
+      }
 
       const name = (h && h.name) || '—';
       const address = (h && h.address) || '—';
@@ -171,7 +279,16 @@
       const tags = Array.isArray(h && h.tags) ? h.tags : [];
 
       const tdName = document.createElement('td');
-      tdName.textContent = name;
+      const hostId = h && h.id != null ? String(h.id) : null;
+      if (hostId) {
+        const a = document.createElement('a');
+        a.className = 'hostsLink';
+        a.href = `/host/${encodeURIComponent(hostId)}`;
+        a.textContent = name;
+        tdName.appendChild(a);
+      } else {
+        tdName.textContent = name;
+      }
 
       const tdAddr = document.createElement('td');
       tdAddr.textContent = address;
@@ -195,6 +312,15 @@
       tdNotes.textContent = notes || '—';
 
       const tdAct = document.createElement('td');
+
+      if (hostId) {
+        const mon = document.createElement('a');
+        mon.className = 'hostsBtnSmall';
+        mon.href = `/host/${encodeURIComponent(hostId)}`;
+        mon.textContent = 'Monitor';
+        tdAct.appendChild(mon);
+      }
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'hostsBtnSmall danger';
@@ -219,6 +345,12 @@
       tr.appendChild(tdNotes);
       tr.appendChild(tdAct);
       els.hostsTbody.appendChild(tr);
+    }
+
+    if (pendingFocusHostId != null) {
+      const id = pendingFocusHostId;
+      pendingFocusHostId = null;
+      focusHostRow(id);
     }
   }
 
@@ -832,6 +964,28 @@
           return;
         }
 
+        if (action === 'overview') {
+          e.preventDefault();
+          setOpen(false);
+          try {
+            location.href = '/overview';
+          } catch (_) {
+            // ignore
+          }
+          return;
+        }
+
+        if (action === 'configuration') {
+          e.preventDefault();
+          setOpen(false);
+          try {
+            location.href = '/configuration';
+          } catch (_) {
+            // ignore
+          }
+          return;
+        }
+
         // Block navigation for sections not implemented.
         e.preventDefault();
         setOpen(false);
@@ -1098,6 +1252,40 @@
     els.logLines.textContent = logs.length ? logs.join('\n') : `${stamp} INFO: system stable`;
   }
 
+  function pad2(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function stampFromUnixTs(ts) {
+    try {
+      const n = Number(ts);
+      if (!Number.isFinite(n) || n <= 0) return new Date().toTimeString().slice(0, 8);
+      const d = new Date(n * 1000);
+      return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    } catch (_) {
+      return new Date().toTimeString().slice(0, 8);
+    }
+  }
+
+  function appendSystemLogLine(line) {
+    try {
+      logs.push(String(line));
+      if (logs.length > 14) logs.shift();
+      els.logLines.textContent = logs.join('\n');
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  function handleBackendLogEvent(msg) {
+    if (!msg) return;
+    const stamp = stampFromUnixTs(msg.ts);
+    const level = String(msg.level || 'INFO').toUpperCase();
+    const message = String(msg.message || '').trim();
+    if (!message) return;
+    appendSystemLogLine(`${stamp} ${level}: ${message}`);
+  }
+
   function gpuHealthFromSample(sample) {
     if (!sample) return 'unknown';
     if (sample.gpu_health) return sample.gpu_health;
@@ -1289,10 +1477,7 @@
 
     while (polling) {
       try {
-        const [latest, insights] = await Promise.all([
-          fetch('/api/metrics/latest').then((r) => r.json()),
-          fetch('/api/insights').then((r) => r.json()),
-        ]);
+        const [latest, insights] = await Promise.all([fetchJson('/api/metrics/latest'), fetchJson('/api/insights')]);
         if (latest && latest.ts) render(latest, insights);
       } catch (_) {
         // ignore
@@ -1346,8 +1531,13 @@
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data);
-        if (msg.type === 'snapshot' || msg.type === 'sample') {
+        if (msg.type === 'log') {
+          handleBackendLogEvent(msg);
+        } else if (msg.type === 'snapshot' || msg.type === 'sample') {
           render(msg.sample, msg.insights);
+        } else if (msg.type === 'host_status') {
+          hostStatuses = (msg && msg.statuses && typeof msg.statuses === 'object') ? msg.statuses : {};
+          renderHostButtons();
         }
       } catch (_) {
         // ignore
@@ -1381,6 +1571,7 @@
     updateClock();
     setInterval(updateClock, 500);
     setupDemoActions();
+    setupHostButtons();
 
     // Ensure initial canvas sizes are correct.
     for (const c of sparkCanvases) resizeCanvasToDisplaySize(c);

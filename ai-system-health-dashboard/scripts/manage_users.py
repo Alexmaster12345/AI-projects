@@ -23,6 +23,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
+import getpass
 
 # When running as a script (python scripts/manage_users.py), Python puts the script
 # directory on sys.path, not the project root. Ensure we can import `app`.
@@ -44,6 +45,24 @@ CREATE TABLE IF NOT EXISTS users (
     created_at REAL NOT NULL
 );
 """
+
+
+def _prompt_password(label: str) -> str:
+    """Prompt for a password without echoing.
+
+    This avoids leaking secrets into shell history or process arguments.
+    """
+    try:
+        p1 = getpass.getpass(f"{label}: ")
+        p2 = getpass.getpass("Confirm password: ")
+    except (EOFError, KeyboardInterrupt):
+        raise SystemExit("Cancelled")
+
+    if (p1 or "") != (p2 or ""):
+        raise SystemExit("Passwords do not match")
+    if not (p1 or "").strip():
+        raise SystemExit("Password cannot be empty")
+    return str(p1)
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
@@ -90,11 +109,12 @@ def cmd_create(args: argparse.Namespace) -> int:
     if role not in ("viewer", "admin"):
         raise SystemExit("--role must be viewer|admin")
 
-    if not args.password:
-        raise SystemExit("--password is required")
+    password = (args.password or "").strip()
+    if not password:
+        password = _prompt_password(f"Set password for new user '{username}'")
 
     hasher = SQLiteAuthStorage(args.db)
-    password_hash = hasher.hash_password(args.password)
+    password_hash = hasher.hash_password(password)
 
     con = _connect(args.db)
     try:
@@ -114,11 +134,13 @@ def cmd_set_password(args: argparse.Namespace) -> int:
     username = (args.username or "").strip()
     if not username:
         raise SystemExit("--username is required")
-    if not args.password:
-        raise SystemExit("--password is required")
+
+    password = (args.password or "").strip()
+    if not password:
+        password = _prompt_password(f"Set new password for '{username}'")
 
     hasher = SQLiteAuthStorage(args.db)
-    password_hash = hasher.hash_password(args.password)
+    password_hash = hasher.hash_password(password)
 
     con = _connect(args.db)
     cur = con.execute(
@@ -193,13 +215,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("create", help="Create a user")
     sp.add_argument("--username", required=True)
-    sp.add_argument("--password", required=True)
+    sp.add_argument(
+        "--password",
+        default=None,
+        help="Password. If omitted, you will be prompted (recommended).",
+    )
     sp.add_argument("--role", default="viewer", choices=["viewer", "admin"])
     sp.set_defaults(func=cmd_create)
 
     sp = sub.add_parser("set-password", help="Set a user's password")
     sp.add_argument("--username", required=True)
-    sp.add_argument("--password", required=True)
+    sp.add_argument(
+        "--password",
+        default=None,
+        help="New password. If omitted, you will be prompted (recommended).",
+    )
     sp.set_defaults(func=cmd_set_password)
 
     sp = sub.add_parser("set-role", help="Set a user's role")
