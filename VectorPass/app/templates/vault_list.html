@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block nav_actions %}
+{% if is_operator or is_admin %}
+  <a class="btn btn-success btn-sm" href="/vault/new">New</a>
+  <a class="btn btn-outline-secondary btn-sm" href="/tokens">Tokens</a>
+{% endif %}
+<form method="post" action="/logout" class="m-0">
+  <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h4 m-0">Vault</h1>
+  <input id="vpSearch" class="form-control form-control-sm" style="max-width: 320px" placeholder="Search…">
+</div>
+
+{% if entries|length == 0 %}
+  <div class="alert alert-info">No entries yet. Click <strong>New</strong> to add your first login.</div>
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle" id="vpTable">
+      <thead>
+        <tr>
+          <th>Site</th>
+          <th>URL</th>
+          <th>Username</th>
+          <th>Tags</th>
+          <th style="width: 1%"></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for e in entries %}
+        <tr>
+          <td class="fw-semibold">{{ e.site_name }}</td>
+          <td><a href="{{ e.url }}" target="_blank" rel="noopener noreferrer">{{ e.url }}</a></td>
+          <td>{{ e.login_username }}</td>
+          <td>
+            {% for t in e.tags %}
+              <span class="badge text-bg-secondary me-1">{{ t }}</span>
+            {% endfor %}
+          </td>
+          <td class="text-end">
+            {% if is_operator or is_admin %}
+              <a class="btn btn-outline-primary btn-sm" href="/vault/{{ e.id }}/edit">Open</a>
+            {% else %}
+              <a class="btn btn-outline-primary btn-sm" href="/vault/{{ e.id }}">View</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/vault.js"></script>
+{% endblock %}

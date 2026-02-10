@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block nav_actions %}
+<a class="btn btn-outline-light btn-sm" href="/vault">Vault</a>
+<form method="post" action="/logout" class="m-0">
+  <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">API Tokens</h1>
+
+<div class="alert alert-warning">
+  Tokens let the Chrome extension fetch and autofill credentials. Treat them like passwords.
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-4">
+    <form method="post" action="/tokens/create" class="row g-3">
+      <div class="col-md-8">
+        <label class="form-label">Token name</label>
+        <input class="form-control" name="name" placeholder="Chrome extension" required>
+      </div>
+      <div class="col-md-4 d-flex align-items-end">
+        <button class="btn btn-primary w-100" type="submit">Create token</button>
+      </div>
+    </form>
+
+    {% if created_token %}
+      <hr>
+      <div class="alert alert-success">
+        <div class="fw-semibold mb-1">Copy this token now (shown only once):</div>
+        <div class="d-flex gap-2">
+          <input id="vpToken" class="form-control font-monospace" readonly value="{{ created_token }}">
+          <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('vpToken').value)">Copy</button>
+        </div>
+      </div>
+    {% endif %}
+
+    <p class="text-muted mb-0">Tip: you can disable a user to revoke access; tokens are tied to the user.</p>
+  </div>
+</div>
+{% endblock %}

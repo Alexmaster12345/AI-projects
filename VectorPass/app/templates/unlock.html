@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block nav_actions %}
+<form method="post" action="/logout" class="m-0">
+  <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h4 mb-2">Unlock vault</h1>
+        <p class="text-muted mb-3">Enter your password to decrypt your stored credentials.</p>
+        {% if error %}
+          <div class="alert alert-danger" role="alert">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/unlock">
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input class="form-control" type="password" name="password" autocomplete="current-password" required autofocus>
+          </div>
+          <button class="btn btn-primary w-100" type="submit">Unlock</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

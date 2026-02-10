@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "VectorPass Autofill",
+  "version": "0.1.0",
+  "description": "Autofill logins from your VectorPass vault.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "VectorPass",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html"
+}

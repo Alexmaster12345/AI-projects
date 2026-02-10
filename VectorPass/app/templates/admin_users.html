@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block nav_actions %}
+<a class="btn btn-outline-light btn-sm" href="/vault">Vault</a>
+<form method="post" action="/logout" class="m-0">
+  <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h4 m-0">Admin: Users</h1>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle m-0">
+        <thead class="table-light">
+          <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th style="width: 1%"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for u in users %}
+          <tr>
+            <td>{{ u.id }}</td>
+            <td class="fw-semibold">{{ u.username }}</td>
+            <td>
+              <form method="post" action="/admin/users/{{ u.id }}/set_role" class="d-flex gap-2">
+                <select class="form-select form-select-sm" name="role">
+                  <option value="user" {% if u.role == 'user' %}selected{% endif %}>user</option>
+                  <option value="operator" {% if u.role == 'operator' %}selected{% endif %}>operator</option>
+                  <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
+                </select>
+                <button class="btn btn-outline-primary btn-sm" type="submit">Save</button>
+              </form>
+            </td>
+            <td>
+              {% if u.is_active %}
+                <span class="badge text-bg-success">active</span>
+              {% else %}
+                <span class="badge text-bg-secondary">disabled</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ u.created_at }}</td>
+            <td class="text-end">
+              <form method="post" action="/admin/users/{{ u.id }}/set_active" class="m-0">
+                <input type="hidden" name="active" value="{% if u.is_active %}0{% else %}1{% endif %}">
+                {% if u.is_active %}
+                  <button class="btn btn-outline-danger btn-sm" type="submit">Disable</button>
+                {% else %}
+                  <button class="btn btn-outline-success btn-sm" type="submit">Enable</button>
+                {% endif %}
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<p class="text-muted mt-3 mb-0">
+  Tip: set <code>VECTORPASS_BOOTSTRAP_ADMIN_USERNAME</code> and <code>VECTORPASS_BOOTSTRAP_ADMIN_PASSWORD</code> in <code>.env</code> to auto-create an admin on startup.
+</p>
+{% endblock %}
