@@ -6,6 +6,16 @@ Local, real-time system monitoring dashboard.
 - Frontend: static HTML + Chart.js (CDN)
 - “AI insights”: rolling z-score anomaly detection over recent history
 
+## UI pages
+
+- Dashboard: `/` (single-page app sections via hash)
+	- `/#problems` — Problems (current problems + recent host events)
+	- `/#hosts` — Hosts inventory
+	- `/#maps` — Maps
+- Inventory: `/inventory` (multi-page)
+- Overview: `/overview` (multi-page)
+- Configuration: `/configuration` (multi-page)
+
 ## Quickstart
 
 ### 1) Create a virtualenv + install deps
@@ -74,6 +84,42 @@ This dashboard includes a simple login system (cookie sessions) with a SQLite us
 
 - `viewer`: can view dashboard + non-admin APIs
 - `admin`: can also call `/api/admin/*` endpoints
+
+## Inventory (assets/equipment)
+
+This repo includes a simple **Inventory** page for tracking generic assets (e.g. switches, PDUs, storage systems).
+
+- Page: `GET /inventory`
+- APIs:
+	- `GET /api/inventory` — list inventory items (any authenticated user)
+	- `POST /api/admin/inventory` — add item (admin only)
+	- `DELETE /api/admin/inventory/{item_id}` — remove item (admin only)
+
+Inventory items are stored in SQLite alongside the metrics DB (same `METRICS_DB_PATH`).
+
+## Problems + host events
+
+The dashboard has a Problems view (`/#problems`) that shows:
+
+- Current problems derived from host checks + protocol checks
+- Recent structured per-host events (failures/recoveries)
+
+API:
+
+- `GET /api/events/recent` — last ~500 in-memory host events (resets on server restart)
+
+## Screenshots (snapshots)
+
+Project UI screenshots are stored under `docs/screenshots/`.
+
+To regenerate them locally, use the helper script:
+
+- `scripts/take_screenshots.py`
+
+It requires Playwright (Chromium). The script reads credentials from env vars so you don't hardcode passwords:
+
+- `ASHD_USER`
+- `ASHD_PASS`
 
 ### Create users (manual SQLite)
 

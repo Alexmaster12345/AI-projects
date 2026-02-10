@@ -42,6 +42,23 @@ class Host(HostBase):
     created_ts: float
 
 
+class InventoryItemBase(BaseModel):
+    name: str = Field(..., description="Item name (e.g. rack, server, switch)")
+    category: Optional[str] = Field(None, description="Optional category (e.g. Server, Network, Rack, UPS)")
+    location: Optional[str] = Field(None, description="Optional location (e.g. DC1 Row A Rack 12)")
+    quantity: int = Field(1, ge=0, description="Quantity on hand")
+    notes: Optional[str] = Field(None, description="Free-form notes")
+
+
+class InventoryItemCreate(InventoryItemBase):
+    pass
+
+
+class InventoryItem(InventoryItemBase):
+    id: int
+    created_ts: float
+
+
 class GpuDevice(BaseModel):
     name: str
     util_percent: Optional[float] = None

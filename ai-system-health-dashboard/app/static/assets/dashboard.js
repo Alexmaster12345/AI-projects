@@ -83,6 +83,16 @@
     hostsEmpty: $('hostsEmpty'),
     hostsTbody: $('hostsTbody'),
 
+    // Problems view
+    problemsView: $('problemsView'),
+    problemsSeverity: $('problemsSeverity'),
+    problemsSearch: $('problemsSearch'),
+    problemsRefreshBtn: $('problemsRefreshBtn'),
+    problemsEmpty: $('problemsEmpty'),
+    problemsTbody: $('problemsTbody'),
+    eventsEmpty: $('eventsEmpty'),
+    eventsList: $('eventsList'),
+
     // Maps view
     mapsView: $('mapsView'),
     mapsErr: $('mapsErr'),
@@ -100,6 +110,8 @@
   let hostInventory = [];
   let hostStatuses = {}; // { [id]: {status, checked_ts, latency_ms, message} }
   let hostChecks = {}; // { [id]: { icmp, ssh, dns, snmp, ntp, ... } }
+  let recentHostEvents = []; // structured host events from backend
+  let recentHostEventsLoaded = false;
   let pendingFocusHostId = null;
   let hostsListCache = []; // last rendered hosts list (for live row updates)
 
@@ -317,6 +329,7 @@
         for (const it of items) {
           const a = it.getAttribute('data-action') || '';
           if (a === 'dashboard' && (view === 'dashboard' || !view)) it.setAttribute('aria-current', 'page');
+          else if (a === 'problems' && view === 'problems') it.setAttribute('aria-current', 'page');
           else if (a === 'hosts' && view === 'hosts') it.setAttribute('aria-current', 'page');
           else if (a === 'maps' && view === 'maps') it.setAttribute('aria-current', 'page');
           else it.removeAttribute('aria-current');
@@ -879,6 +892,12 @@
 
   function routeFromHash() {
     const h = (location.hash || '').toLowerCase();
+    if (h === '#problems') {
+      setView('problems');
+      renderProblemsView();
+      ensureRecentEventsLoaded();
+      return;
+    }
     if (h === '#hosts') {
       setView('hosts');
       refreshHosts();
@@ -890,6 +909,240 @@
       return;
     }
     setView('dashboard');
+  }
+
+  function fmtTs(ts) {
+    try {
+      const n = Number(ts);
+      if (!isFinite(n) || n <= 0) return '—';
+      const d = new Date(n * 1000);
+      return d.toLocaleString();
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  function toSevClass(s) {
+    s = String(s || '').toLowerCase();
+    if (s === 'crit') return 'crit';
+    if (s === 'warn') return 'warn';
+    if (s === 'info') return 'info';
+    if (s === 'ok') return 'ok';
+    return 'unknown';
+  }
+
+  function statusLabel(s) {
+    s = String(s || '').toLowerCase();
+    if (s === 'crit') return 'CRIT';
+    if (s === 'warn') return 'WARN';
+    if (s === 'ok') return 'OK';
+    if (s === 'unknown') return 'UNK';
+    return String(s || '—').toUpperCase();
+  }
+
+  function shouldIncludeStatus(status, severityMode) {
+    const s = String(status || '').toLowerCase();
+    if (severityMode === 'crit') return s === 'crit';
+    if (severityMode === 'crit_warn') return s === 'crit' || s === 'warn';
+    return s !== 'ok';
+  }
+
+  function problemsSearchMatch(item, q) {
+    if (!q) return true;
+    const hay = [item.scope, item.target, item.check, item.message].map((x) => String(x || '').toLowerCase()).join(' ');
+    return hay.includes(q);
+  }
+
+  function getHostDisplayById(hostId) {
+    const idStr = String(hostId);
+    const inv = Array.isArray(hostInventory) ? hostInventory : [];
+    for (const h of inv) {
+      try {
+        if (h && String(h.id) === idStr) {
+          const name = String(h.name || '').trim();
+          const addr = String(h.address || '').trim();
+          return name || addr || `host-${idStr}`;
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+    return `host-${idStr}`;
+  }
+
+  function buildCurrentProblems() {
+    const out = [];
+
+    // Host problems (from hostChecks)
+    const checksObj = hostChecks && typeof hostChecks === 'object' ? hostChecks : {};
+    for (const hostId of Object.keys(checksObj)) {
+      const checks = checksObj[hostId];
+      if (!checks || typeof checks !== 'object') continue;
+      for (const k of Object.keys(PROTO_LABELS)) {
+        const st = checks[k];
+        const s = toLowerStatus(st);
+        if (s === 'ok') continue;
+        const msg = st && st.message ? String(st.message).trim() : '';
+        out.push({
+          scope: 'Host',
+          hostId: hostId,
+          target: getHostDisplayById(hostId),
+          check: PROTO_LABELS[k] || k.toUpperCase(),
+          status: s,
+          message: msg,
+          ts: st && st.checked_ts != null ? Number(st.checked_ts) : null,
+        });
+      }
+    }
+
+    // System protocol problems (from latest sample)
+    try {
+      const p = lastSample && lastSample.protocols && typeof lastSample.protocols === 'object' ? lastSample.protocols : null;
+      if (p) {
+        const sysLabels = { ntp: 'NTP', icmp: 'ICMP', snmp: 'SNMP', netflow: 'NETFLOW' };
+        for (const key of Object.keys(sysLabels)) {
+          const st = p[key] || null;
+          const s = toLowerStatus(st);
+          if (s === 'ok') continue;
+          const msg = st && st.message ? String(st.message).trim() : '';
+          out.push({
+            scope: 'System',
+            hostId: null,
+            target: 'ASHD',
+            check: sysLabels[key],
+            status: s,
+            message: msg,
+            ts: st && st.checked_ts != null ? Number(st.checked_ts) : null,
+          });
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    // Sort: crit first, then warn, then unknown; newest first.
+    const rank = (s) => (String(s).toLowerCase() === 'crit' ? 0 : (String(s).toLowerCase() === 'warn' ? 1 : 2));
+    out.sort((a, b) => {
+      const r = rank(a.status) - rank(b.status);
+      if (r !== 0) return r;
+      const ta = a.ts || 0;
+      const tb = b.ts || 0;
+      return tb - ta;
+    });
+
+    return out;
+  }
+
+  function renderProblemsView() {
+    if (!els.problemsTbody) return;
+
+    const severityMode = els.problemsSeverity ? String(els.problemsSeverity.value || 'crit_warn') : 'crit_warn';
+    const q = els.problemsSearch ? String(els.problemsSearch.value || '').trim().toLowerCase() : '';
+    const items = buildCurrentProblems().filter((it) => shouldIncludeStatus(it.status, severityMode) && problemsSearchMatch(it, q));
+
+    els.problemsTbody.innerHTML = '';
+    if (!items.length) {
+      if (els.problemsEmpty) els.problemsEmpty.style.display = '';
+    } else {
+      if (els.problemsEmpty) els.problemsEmpty.style.display = 'none';
+    }
+
+    for (const it of items) {
+      const tr = document.createElement('tr');
+
+      const tdScope = document.createElement('td');
+      tdScope.textContent = it.scope;
+
+      const tdTarget = document.createElement('td');
+      if (it.scope === 'Host' && it.hostId != null) {
+        const a = document.createElement('a');
+        a.className = 'hostsLink';
+        a.href = `/host/${encodeURIComponent(String(it.hostId))}`;
+        a.textContent = it.target;
+        tdTarget.appendChild(a);
+      } else {
+        tdTarget.textContent = it.target;
+      }
+
+      const tdCheck = document.createElement('td');
+      tdCheck.textContent = it.check;
+
+      const tdStatus = document.createElement('td');
+      const badge = document.createElement('span');
+      badge.className = `badgeSev ${toSevClass(it.status)}`;
+      badge.textContent = statusLabel(it.status);
+      tdStatus.appendChild(badge);
+
+      const tdMsg = document.createElement('td');
+      tdMsg.textContent = it.message || '—';
+
+      const tdTs = document.createElement('td');
+      tdTs.textContent = it.ts ? fmtTs(it.ts) : '—';
+
+      tr.appendChild(tdScope);
+      tr.appendChild(tdTarget);
+      tr.appendChild(tdCheck);
+      tr.appendChild(tdStatus);
+      tr.appendChild(tdMsg);
+      tr.appendChild(tdTs);
+      els.problemsTbody.appendChild(tr);
+    }
+
+    renderRecentEvents();
+  }
+
+  function renderRecentEvents() {
+    if (!els.eventsList) return;
+    const severityMode = els.problemsSeverity ? String(els.problemsSeverity.value || 'crit_warn') : 'crit_warn';
+    const q = els.problemsSearch ? String(els.problemsSearch.value || '').trim().toLowerCase() : '';
+
+    const list = Array.isArray(recentHostEvents) ? recentHostEvents : [];
+    const filtered = list.filter((ev) => {
+      const st = (ev && ev.status) ? String(ev.status).toLowerCase() : '';
+      const level = (ev && ev.level) ? String(ev.level).toLowerCase() : '';
+      const s = st || level;
+      if (!shouldIncludeStatus(s === 'info' ? 'ok' : s, severityMode) && severityMode !== 'all') {
+        // allow INFO only if mode=all
+        return severityMode === 'all';
+      }
+      const item = {
+        scope: 'Host',
+        target: (ev && (ev.host_name || ev.address)) || '',
+        check: ev && ev.check ? ev.check : '',
+        message: ev && ev.message ? ev.message : '',
+      };
+      return problemsSearchMatch(item, q);
+    });
+
+    els.eventsList.innerHTML = '';
+    if (els.eventsEmpty) els.eventsEmpty.style.display = filtered.length ? 'none' : '';
+
+    for (let i = Math.max(0, filtered.length - 120); i < filtered.length; i++) {
+      const ev = filtered[i];
+      const div = document.createElement('div');
+      const sev = (ev && String(ev.level || '').toLowerCase() === 'info') ? 'info' : toSevClass((ev && (ev.status || ev.level)) || 'unknown');
+      div.className = `eventLine ${sev}`;
+      const when = ev && ev.ts ? fmtTs(ev.ts) : '—';
+      const host = (ev && (ev.host_name || ev.address)) ? String(ev.host_name || ev.address) : getHostDisplayById(ev && ev.host_id);
+      const check = ev && ev.check ? String(ev.check).toUpperCase() : 'CHECK';
+      const msg = ev && ev.message ? String(ev.message) : '';
+      div.textContent = `${when} ${String((ev && ev.level) || '').toUpperCase()} ${host} ${check}: ${msg}`.trim();
+      els.eventsList.appendChild(div);
+    }
+  }
+
+  async function ensureRecentEventsLoaded() {
+    if (recentHostEventsLoaded) return;
+    recentHostEventsLoaded = true;
+    try {
+      const r = await fetchJson('/api/events/recent');
+      const evs = r && r.events ? r.events : [];
+      recentHostEvents = Array.isArray(evs) ? evs : [];
+      renderRecentEvents();
+    } catch (_) {
+      recentHostEvents = [];
+      renderRecentEvents();
+    }
   }
 
   // --- Sidebar UX (Zabbix-style menu) ---
@@ -1072,6 +1325,18 @@
           return;
         }
 
+        if (action === 'problems') {
+          e.preventDefault();
+          setOpen(false);
+          try {
+            location.hash = 'problems';
+          } catch (_) {
+            // ignore
+          }
+          routeFromHash();
+          return;
+        }
+
         if (action === 'maps') {
           e.preventDefault();
           setOpen(false);
@@ -1100,6 +1365,17 @@
           setOpen(false);
           try {
             location.href = '/configuration';
+          } catch (_) {
+            // ignore
+          }
+          return;
+        }
+
+        if (action === 'inventory') {
+          e.preventDefault();
+          setOpen(false);
+          try {
+            location.href = '/inventory';
           } catch (_) {
             // ignore
           }
@@ -1406,6 +1682,32 @@
     appendSystemLogLine(`${stamp} ${level}: ${message}`);
   }
 
+  function handleHostEventForLogs(ev) {
+    if (!ev) return;
+    const stamp = stampFromUnixTs(ev.ts);
+    const level = String(ev.level || '').toUpperCase() || (ev.status === 'crit' ? 'CRIT' : ev.status === 'warn' ? 'WARN' : 'INFO');
+
+    const host = (ev.host_name != null && String(ev.host_name).trim())
+      ? String(ev.host_name).trim()
+      : (ev.host_id != null ? `host#${ev.host_id}` : 'host');
+    const addr = (ev.addr != null && String(ev.addr).trim()) ? String(ev.addr).trim() : '';
+    const check = (ev.check != null && String(ev.check).trim()) ? String(ev.check).trim().toUpperCase() : 'CHECK';
+    const status = (ev.status != null && String(ev.status).trim()) ? String(ev.status).trim().toUpperCase() : '';
+    const message = (ev.message != null) ? String(ev.message).trim() : '';
+
+    const head = `${host}${addr ? ' (' + addr + ')' : ''} ${check}${status ? ' ' + status : ''}`;
+    const line = `${stamp} ${level}: ${head}${message ? ' — ' + message : ''}`;
+
+    // Avoid obvious duplicates when WS reconnects or backend replays the same message.
+    try {
+      if (logs && logs.length && logs[logs.length - 1] === line) return;
+    } catch (_) {
+      // ignore
+    }
+
+    appendSystemLogLine(line);
+  }
+
   function gpuHealthFromSample(sample) {
     if (!sample) return 'unknown';
     if (sample.gpu_health) return sample.gpu_health;
@@ -1653,13 +1955,47 @@
         const msg = JSON.parse(evt.data);
         if (msg.type === 'log') {
           handleBackendLogEvent(msg);
+        } else if (msg.type === 'host_event') {
+          // Structured per-host event (recent failures/recoveries).
+          handleHostEventForLogs(msg);
+          try {
+            if (!Array.isArray(recentHostEvents)) recentHostEvents = [];
+            recentHostEvents.push(msg);
+            // Keep a bounded client-side buffer too.
+            if (recentHostEvents.length > 500) recentHostEvents.splice(0, recentHostEvents.length - 500);
+          } catch (_) {
+            // ignore
+          }
+          // If the Problems view is active, refresh the events list.
+          try {
+            if (String(document.body.dataset.view || '') === 'problems') {
+              renderRecentEvents();
+            }
+          } catch (_) {
+            // ignore
+          }
         } else if (msg.type === 'snapshot' || msg.type === 'sample') {
           render(msg.sample, msg.insights);
+          // If Problems is visible, refresh system problems derived from the latest sample.
+          try {
+            if (String(document.body.dataset.view || '') === 'problems') {
+              renderProblemsView();
+            }
+          } catch (_) {
+            // ignore
+          }
         } else if (msg.type === 'host_status') {
           hostStatuses = (msg && msg.statuses && typeof msg.statuses === 'object') ? msg.statuses : {};
           hostChecks = (msg && msg.checks && typeof msg.checks === 'object') ? msg.checks : {};
           renderHostButtons();
           updateHostsProtocolsLive();
+          try {
+            if (String(document.body.dataset.view || '') === 'problems') {
+              renderProblemsView();
+            }
+          } catch (_) {
+            // ignore
+          }
         }
       } catch (_) {
         // ignore
@@ -1694,6 +2030,30 @@
     setInterval(updateClock, 500);
     setupDemoActions();
     setupHostButtons();
+
+    // Problems view controls
+    try {
+      if (els.problemsRefreshBtn) {
+        els.problemsRefreshBtn.addEventListener('click', () => {
+          // Force reload of recent events and re-render problems.
+          recentHostEventsLoaded = false;
+          ensureRecentEventsLoaded();
+          renderProblemsView();
+        });
+      }
+      if (els.problemsSeverity) {
+        els.problemsSeverity.addEventListener('change', () => {
+          renderProblemsView();
+        });
+      }
+      if (els.problemsSearch) {
+        els.problemsSearch.addEventListener('input', () => {
+          renderProblemsView();
+        });
+      }
+    } catch (_) {
+      // ignore
+    }
 
     // Ensure initial canvas sizes are correct.
     for (const c of sparkCanvases) resizeCanvasToDisplaySize(c);

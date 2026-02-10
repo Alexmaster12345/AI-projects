@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI System Diagnostic</title>
-    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260207_7" />
-    <script defer src="/static/assets/dashboard.js?v=20260207_7"></script>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260211_2" />
+    <script defer src="/static/assets/dashboard.js?v=20260211_2"></script>
   </head>
   <body>
     <div class="appShell" id="appShell">
@@ -36,7 +36,7 @@
 
           <div class="sideGroup">
             <div class="sideGroupTitle">Inventory</div>
-            <a class="sideItem" href="#" data-action="inventory" data-label="Inventory">Inventory</a>
+            <a class="sideItem" href="/inventory" data-action="inventory" data-label="Inventory">Inventory</a>
           </div>
 
           <div class="sideGroup">
@@ -160,6 +160,60 @@
             </div>
           </div>
 
+          <!-- Problems page (single-page view, toggled by dashboard.js via location.hash) -->
+          <section class="problemsView" id="problemsView" aria-label="Problems">
+            <div class="hostsHeader">
+              <div>
+                <div class="hostsTitle">Problems</div>
+                <div class="hostsSub muted">Current issues and recent error events for monitored hosts.</div>
+              </div>
+              <div class="mapsToolbar" role="toolbar" aria-label="Problems toolbar">
+                <label class="mapsSelect">
+                  <span class="k">Severity</span>
+                  <select id="problemsSeverity">
+                    <option value="crit">Critical</option>
+                    <option value="crit_warn" selected>Critical + Warning</option>
+                    <option value="all">All</option>
+                  </select>
+                </label>
+                <label class="mapsSelect">
+                  <span class="k">Search</span>
+                  <input id="problemsSearch" class="sideSearch" style="max-width: 220px;" placeholder="host / check / message" autocomplete="off" />
+                </label>
+                <button id="problemsRefreshBtn" class="hostsBtnSmall" type="button">Refresh</button>
+              </div>
+            </div>
+
+            <div class="problemsGrid">
+              <div class="hostsCard">
+                <div class="hostsCardTitle">Current problems</div>
+                <div id="problemsEmpty" class="hostsEmpty muted" style="display:none;">No problems detected.</div>
+                <div class="hostsTableWrap">
+                  <table class="hostsTable" aria-label="Problems table">
+                    <thead>
+                      <tr>
+                        <th>Scope</th>
+                        <th>Target</th>
+                        <th>Check</th>
+                        <th>Status</th>
+                        <th>Message</th>
+                        <th>Checked</th>
+                      </tr>
+                    </thead>
+                    <tbody id="problemsTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="hostsCard">
+                <div class="hostsCardTitle">Recent host events</div>
+                <div class="muted" style="margin:-6px 0 10px; font-size:12px;">Shows the last 500 events (memory only; resets on server restart).</div>
+                <div id="eventsEmpty" class="hostsEmpty muted" style="display:none;">No recent events.</div>
+                <div id="eventsList" class="eventsList" aria-label="Recent events"></div>
+              </div>
+            </div>
+          </section>
+
           <!-- Hosts page (single-page view, toggled by dashboard.js via location.hash) -->
           <section class="hostsView" id="hostsView" aria-label="Hosts">
             <div class="hostsHeader">
@@ -185,7 +239,17 @@
                   </label>
                   <label class="hostsField">
                     <span class="k">Type</span>
-                    <input id="hostType" placeholder="Linux / Windows / Router…" />
+                    <input id="hostType" list="hostTypeList" placeholder="Linux / Windows / Router…" />
+                    <datalist id="hostTypeList">
+                      <option value="Linux"></option>
+                      <option value="Windows"></option>
+                      <option value="Router"></option>
+                      <option value="Firewall"></option>
+                      <option value="Switch"></option>
+                      <option value="PDU"></option>
+                      <option value="Storage system"></option>
+                      <option value="Koolance systems"></option>
+                    </datalist>
                   </label>
                   <label class="hostsField">
                     <span class="k">Tags</span>

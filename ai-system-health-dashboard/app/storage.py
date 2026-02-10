@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import settings
-from .models import Host, HostCreate, SystemSample
+from .models import Host, HostCreate, InventoryItem, InventoryItemCreate, SystemSample
 
 
 class SQLiteMetricsStorage:
@@ -57,6 +57,22 @@ class SQLiteMetricsStorage:
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_hosts_active ON hosts(is_active);")
+
+        # Generic inventory items (admin-managed).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS inventory_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                category TEXT,
+                location TEXT,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                notes TEXT,
+                created_ts REAL NOT NULL
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_inventory_items_created ON inventory_items(created_ts);")
         conn.commit()
         self._conn = conn
 
@@ -236,6 +252,68 @@ class SQLiteMetricsStorage:
             conn.commit()
             return bool(cur.rowcount or 0)
 
+    def list_inventory_items(self) -> list[InventoryItem]:
+        if not self.enabled:
+            return []
+        conn = self._require_conn()
+        with self._lock:
+            rows = conn.execute(
+                "SELECT id, name, category, location, quantity, notes, created_ts FROM inventory_items ORDER BY id DESC"
+            ).fetchall()
+        out: list[InventoryItem] = []
+        for row in rows:
+            (iid, name, category, location, quantity, notes, created_ts) = row
+            out.append(
+                InventoryItem(
+                    id=int(iid),
+                    name=str(name),
+                    category=(str(category) if category is not None and str(category).strip() != "" else None),
+                    location=(str(location) if location is not None and str(location).strip() != "" else None),
+                    quantity=int(quantity or 0),
+                    notes=(str(notes) if notes is not None and str(notes).strip() != "" else None),
+                    created_ts=float(created_ts),
+                )
+            )
+        return out
+
+    def create_inventory_item(self, item_in: InventoryItemCreate) -> InventoryItem:
+        if not self.enabled:
+            raise RuntimeError("Inventory storage is disabled (metrics DB path not set)")
+        conn = self._require_conn()
+        now = time.time()
+        with self._lock:
+            cur = conn.execute(
+                "INSERT INTO inventory_items (name, category, location, quantity, notes, created_ts) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    str(item_in.name).strip(),
+                    (str(item_in.category).strip() if item_in.category is not None and str(item_in.category).strip() != "" else None),
+                    (str(item_in.location).strip() if item_in.location is not None and str(item_in.location).strip() != "" else None),
+                    int(item_in.quantity or 0),
+                    (str(item_in.notes) if item_in.notes is not None and str(item_in.notes).strip() != "" else None),
+                    float(now),
+                ),
+            )
+            conn.commit()
+            iid = int(cur.lastrowid)
+        return InventoryItem(
+            id=iid,
+            name=str(item_in.name).strip(),
+            category=(str(item_in.category).strip() if item_in.category is not None and str(item_in.category).strip() != "" else None),
+            location=(str(item_in.location).strip() if item_in.location is not None and str(item_in.location).strip() != "" else None),
+            quantity=int(item_in.quantity or 0),
+            notes=(str(item_in.notes) if item_in.notes is not None and str(item_in.notes).strip() != "" else None),
+            created_ts=float(now),
+        )
+
+    def delete_inventory_item(self, item_id: int) -> bool:
+        if not self.enabled:
+            return False
+        conn = self._require_conn()
+        with self._lock:
+            cur = conn.execute("DELETE FROM inventory_items WHERE id = ?", (int(item_id),))
+            conn.commit()
+            return bool(cur.rowcount or 0)
+
 
 storage = SQLiteMetricsStorage(settings.metrics_db_path)
 
@@ -296,3 +374,21 @@ async def deactivate_host(host_id: int) -> bool:
     if not storage.enabled:
         return False
     return await asyncio.to_thread(storage.deactivate_host, int(host_id))
+
+
+async def get_inventory_items() -> list[InventoryItem]:
+    if not storage.enabled:
+        return []
+    return await asyncio.to_thread(storage.list_inventory_items)
+
+
+async def create_inventory_item(item_in: InventoryItemCreate) -> InventoryItem:
+    if not storage.enabled:
+        raise RuntimeError("Inventory storage is disabled (metrics DB path not set)")
+    return await asyncio.to_thread(storage.create_inventory_item, item_in)
+
+
+async def delete_inventory_item(item_id: int) -> bool:
+    if not storage.enabled:
+        return False
+    return await asyncio.to_thread(storage.delete_inventory_item, int(item_id))

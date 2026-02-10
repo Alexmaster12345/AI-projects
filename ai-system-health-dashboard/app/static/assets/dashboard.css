@@ -291,14 +291,70 @@ body {
 
 /* --- Views (single-page routing via body[data-view]) --- */
 /* Default to dashboard view if JS hasn't set anything yet. */
+#problemsView { display: none; }
 #hostsView { display: none; }
 #mapsView { display: none; }
+
+body[data-view="problems"] .hud { display: none; }
+body[data-view="problems"] #problemsView { display: block; }
 
 body[data-view="hosts"] .hud { display: none; }
 body[data-view="hosts"] #hostsView { display: block; }
 
 body[data-view="maps"] .hud { display: none; }
 body[data-view="maps"] #mapsView { display: block; }
+
+/* --- Problems page --- */
+.problemsView {
+  width: min(var(--container-width), 1400px);
+  margin: 0 auto;
+  padding: var(--frame-pad-y) var(--frame-pad-x);
+}
+
+.problemsGrid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--grid-gap);
+}
+
+@media (max-width: 1100px) {
+  .problemsGrid { grid-template-columns: 1fr; }
+}
+
+.eventsList {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.16);
+  padding: 10px 10px;
+  max-height: min(520px, 62vh);
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.eventLine { padding: 6px 8px; border-radius: 10px; }
+.eventLine + .eventLine { margin-top: 6px; }
+.eventLine.crit { background: rgba(255, 77, 109, 0.10); border: 1px solid rgba(255, 77, 109, 0.28); }
+.eventLine.warn { background: rgba(255, 209, 102, 0.10); border: 1px solid rgba(255, 209, 102, 0.24); }
+.eventLine.info { background: rgba(110, 231, 255, 0.06); border: 1px solid rgba(110, 231, 255, 0.16); }
+
+.badgeSev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.badgeSev.crit { color: rgba(255, 230, 236, 0.95); background: rgba(255, 77, 109, 0.14); border-color: rgba(255, 77, 109, 0.30); }
+.badgeSev.warn { color: rgba(255, 246, 226, 0.95); background: rgba(255, 209, 102, 0.14); border-color: rgba(255, 209, 102, 0.28); }
+.badgeSev.ok { color: rgba(225, 255, 240, 0.95); background: rgba(85, 255, 166, 0.12); border-color: rgba(85, 255, 166, 0.22); }
+
 
 /* --- Hosts page --- */
 .hostsView {
@@ -1130,6 +1186,37 @@ header {
   color: var(--crit);
   border-color: color-mix(in srgb, var(--crit) 55%, rgba(255,255,255,0.10));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--crit) 16%, transparent);
+  /* Make alerts unmistakable: blink + glow. */
+  animation: hostCritPulse 0.78s ease-in-out infinite;
+  will-change: transform, box-shadow, background-color;
+}
+
+@keyframes hostCritPulse {
+  0%, 100% {
+    transform: scale(1);
+    background: rgba(255,255,255,0.04);
+    color: var(--crit);
+    border-color: color-mix(in srgb, var(--crit) 55%, rgba(255,255,255,0.10));
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--crit) 16%, transparent),
+      0 0 0 0 rgba(255, 77, 109, 0.0);
+  }
+  50% {
+    transform: scale(1.06);
+    /* Higher contrast blink */
+    background: rgba(255, 77, 109, 0.30);
+    color: rgba(255, 255, 255, 0.96);
+    border-color: rgba(255, 77, 109, 0.85);
+    box-shadow:
+      0 0 0 1px rgba(255, 77, 109, 0.65),
+      0 0 26px 6px rgba(255, 77, 109, 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostBtn.crit {
+    animation: none;
+  }
 }
 
 .hostBtn:focus-visible {

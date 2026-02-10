@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ASHD · Inventory</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260211_1" />
+    <link rel="stylesheet" href="/static/assets/inventory.css?v=20260211_2" />
+    <script defer src="/static/assets/inventory.js?v=20260211_2"></script>
+  </head>
+  <body>
+    <div class="appShell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">ASHD</div>
+          </div>
+
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/" data-action="dashboard" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="/overview" data-action="overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="/#hosts" data-action="hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/#maps" data-action="maps" data-label="Maps">Maps</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Inventory</div>
+            <a class="sideItem" href="/inventory" data-action="inventory" data-label="Inventory" aria-current="page">Inventory</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Configuration</div>
+            <a class="sideItem" href="/configuration" data-action="configuration" data-label="Configuration">Configuration</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <form class="sideLogout" method="post" action="/logout">
+              <button class="sideItem sideBtn" type="submit" data-action="logout">Sign out</button>
+            </form>
+          </div>
+        </nav>
+      </aside>
+
+      <div class="content" id="content">
+        <div class="inventoryWrap">
+          <header class="inventoryHeader">
+            <div>
+              <div class="inventoryTitle">Inventory</div>
+              <div class="inventorySub muted">Assets and equipment list (admin-managed).</div>
+            </div>
+            <div class="inventoryBadge">
+              <span class="dot"></span>
+              <span id="invConn">loading…</span>
+              <span class="sep">·</span>
+              <span class="muted" id="invUser">—</span>
+            </div>
+          </header>
+
+          <div id="invErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+          <div class="inventoryGrid">
+            <section class="hostsCard invHero">
+              <div class="hostsCardTitle">Rack view</div>
+              <div class="invHeroInner">
+                <img class="invHeroImg" src="/static/assets/inventory_rack.svg" alt="Rack illustration" />
+                <div class="invHeroCopy">
+                  <div class="muted">
+                    Keep track of servers, racks, switches, and other equipment.
+                    Use categories + locations to stay sane when everything is black and 1U tall.
+                  </div>
+                  <div class="invHeroStats">
+                    <div class="invStat">
+                      <div class="k muted">Items</div>
+                      <div id="invCount" class="v">—</div>
+                    </div>
+                    <div class="invStat">
+                      <div class="k muted">Last refresh</div>
+                      <div id="invRef" class="v">—</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="hostsCard invManage" id="invManageCard" style="display:none;">
+              <div class="hostsCardTitle">Manage inventory (admin)</div>
+              <form id="invAddForm" class="invForm" autocomplete="off">
+                <div class="invFormRow">
+                  <label class="invField">
+                    <span class="muted">Name</span>
+                    <input id="invName" class="invInput" type="text" list="invNameList" placeholder="e.g. Dell R740" required />
+                    <datalist id="invNameList">
+                      <option value="Switch"></option>
+                      <option value="Koolance systems"></option>
+                      <option value="PDU"></option>
+                      <option value="Storage system"></option>
+                    </datalist>
+                  </label>
+                  <label class="invField">
+                    <span class="muted">Category</span>
+                    <input id="invCategory" class="invInput" type="text" list="invCategoryList" placeholder="e.g. Server" />
+                    <datalist id="invCategoryList">
+                      <option value="Switch"></option>
+                      <option value="Koolance systems"></option>
+                      <option value="PDU"></option>
+                      <option value="Storage system"></option>
+                    </datalist>
+                  </label>
+                </div>
+                <div class="invFormRow">
+                  <label class="invField">
+                    <span class="muted">Location</span>
+                    <input id="invLocation" class="invInput" type="text" placeholder="e.g. DC1 Row A Rack 12" />
+                  </label>
+                  <label class="invField invQty">
+                    <span class="muted">Qty</span>
+                    <input id="invQty" class="invInput" type="number" min="0" step="1" value="1" />
+                  </label>
+                </div>
+                <label class="invField">
+                  <span class="muted">Notes</span>
+                  <input id="invNotes" class="invInput" type="text" placeholder="Serial, owner, warranty, etc." />
+                </label>
+                <div class="invActions">
+                  <button class="btn" type="submit" id="invAddBtn">Add</button>
+                  <button class="btn" type="button" id="invRefreshBtn">Refresh</button>
+                </div>
+                <div class="muted invHint">Only admins can add/remove inventory items.</div>
+              </form>
+            </section>
+
+            <section class="hostsCard invList">
+              <div class="hostsCardTitle">Items</div>
+              <div class="invToolbar">
+                <input id="invSearch" class="invSearch" type="text" placeholder="Search name/category/location…" autocomplete="off" />
+              </div>
+              <div class="invTableWrap">
+                <table class="invTable" aria-label="Inventory items">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Category</th>
+                      <th>Location</th>
+                      <th class="qty">Qty</th>
+                      <th>Notes</th>
+                      <th class="act" id="invActHead" style="display:none;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="invTbody"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

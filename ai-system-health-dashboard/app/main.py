@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import json
 import re
 import secrets
@@ -20,13 +21,16 @@ from .anomaly import compute_insights
 from .auth_storage import auth_storage, init_auth_storage
 from .config import settings
 from .metrics import add_sample, collect_sample, history, latest
-from .models import HostCreate, ProtocolStatus
+from .models import HostCreate, InventoryItemCreate, ProtocolStatus
 from .storage import create_host as db_create_host
+from .storage import create_inventory_item as db_create_inventory_item
 from .storage import get_history as db_get_history
 from .storage import get_hosts as db_get_hosts
+from .storage import get_inventory_items as db_get_inventory_items
 from .storage import get_latest as db_get_latest
 from .storage import get_stats as db_get_stats
 from .storage import deactivate_host as db_deactivate_host
+from .storage import delete_inventory_item as db_delete_inventory_item
 from .storage import init_storage
 from .storage import persist_sample
 from .storage import prune_old
@@ -309,6 +313,12 @@ async def configuration_page() -> Any:
         return f.read()
 
 
+@app.get("/inventory", response_class=HTMLResponse)
+async def inventory_page() -> Any:
+    with open("app/static/inventory.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+
 @app.get("/host/{host_id}", response_class=HTMLResponse)
 async def host_page(host_id: int) -> Any:
     # host_id is used by the frontend JS; keep the HTML static.
@@ -441,20 +451,13 @@ async def api_hosts(active_only: bool = True) -> Any:
     return [h.model_dump() for h in hosts]
 
 
-@app.get("/api/hosts/{host_id}")
-async def api_host(host_id: int) -> Any:
+@app.get("/api/inventory")
+async def api_inventory() -> Any:
     # Auth is handled by middleware.
     if not storage.enabled:
-        return JSONResponse({"detail": "Host storage is disabled"}, status_code=503)
-    # Storage layer currently provides list_hosts; keep this simple.
-    hosts = await db_get_hosts(active_only=False)
-    for h in hosts:
-        try:
-            if int(getattr(h, "id", -1)) == int(host_id):
-                return h.model_dump()
-        except Exception:
-            continue
-    return JSONResponse({"detail": "Not found"}, status_code=404)
+        return JSONResponse({"detail": "Inventory storage is disabled"}, status_code=503)
+    items = await db_get_inventory_items()
+    return [it.model_dump() for it in items]
 
 
 @app.get("/api/hosts/status")
@@ -485,6 +488,51 @@ async def api_host_checks(host_id: int) -> Any:
         return {"ts": float(_host_checks_ts), "host_id": int(host_id), "checks": checks or {}}
 
 
+@app.get("/api/hosts/{host_id}")
+async def api_host(host_id: int) -> Any:
+    # Auth is handled by middleware.
+    if not storage.enabled:
+        return JSONResponse({"detail": "Host storage is disabled"}, status_code=503)
+    # Storage layer currently provides list_hosts; keep this simple.
+    hosts = await db_get_hosts(active_only=False)
+    for h in hosts:
+        try:
+            if int(getattr(h, "id", -1)) == int(host_id):
+                return h.model_dump()
+        except Exception:
+            continue
+    return JSONResponse({"detail": "Not found"}, status_code=404)
+
+
+@app.get("/api/events/recent")
+async def api_events_recent(host_id: Optional[int] = None, limit: int = 500) -> Any:
+    """Return recent structured host events.
+
+    This is an in-memory ring buffer (max 500) intended for the dashboard UI.
+    It resets on server restart.
+    """
+    try:
+        limit_i = int(limit)
+    except Exception:
+        limit_i = 500
+    limit_i = max(1, min(500, limit_i))
+
+    async with _host_events_lock:
+        evs = list(_host_events)
+
+    if host_id is not None:
+        try:
+            hid = int(host_id)
+            evs = [e for e in evs if int(e.get("host_id") or 0) == hid]
+        except Exception:
+            evs = []
+
+    if len(evs) > limit_i:
+        evs = evs[-limit_i:]
+
+    return {"events": evs}
+
+
 @app.post("/api/admin/hosts")
 async def api_admin_hosts_create(payload: HostCreate) -> Any:
     # Admin role is enforced by middleware for /api/admin/*.
@@ -497,11 +545,33 @@ async def api_admin_hosts_create(payload: HostCreate) -> Any:
     return host.model_dump()
 
 
+@app.post("/api/admin/inventory")
+async def api_admin_inventory_create(payload: InventoryItemCreate) -> Any:
+    # Admin role is enforced by middleware for /api/admin/*.
+    if not storage.enabled:
+        return JSONResponse({"detail": "Inventory storage is disabled"}, status_code=503)
+    try:
+        item = await db_create_inventory_item(payload)
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=400)
+    return item.model_dump()
+
+
 @app.delete("/api/admin/hosts/{host_id}")
 async def api_admin_hosts_delete(host_id: int) -> Any:
     if not storage.enabled:
         return JSONResponse({"detail": "Host storage is disabled"}, status_code=503)
     ok = await db_deactivate_host(int(host_id))
+    if not ok:
+        return JSONResponse({"detail": "Not found"}, status_code=404)
+    return {"ok": True}
+
+
+@app.delete("/api/admin/inventory/{item_id}")
+async def api_admin_inventory_delete(item_id: int) -> Any:
+    if not storage.enabled:
+        return JSONResponse({"detail": "Inventory storage is disabled"}, status_code=503)
+    ok = await db_delete_inventory_item(int(item_id))
     if not ok:
         return JSONResponse({"detail": "Not found"}, status_code=404)
     return {"ok": True}
@@ -569,6 +639,11 @@ _host_status: dict[int, dict[str, Any]] = {}
 _host_checks_ts: float = 0.0
 _host_checks: dict[int, dict[str, Any]] = {}
 
+# --- Recent host events (in-memory, non-persistent) ---
+# Used by the dashboard's "Problems" view.
+_host_events_lock = asyncio.Lock()
+_host_events: deque[dict[str, Any]] = deque(maxlen=500)
+
 _HOST_CHECK_INTERVAL_S = 15.0
 _HOST_CHECK_MAX_CONCURRENCY = 12
 
@@ -604,7 +679,7 @@ def _looks_like_ip(s: str) -> bool:
         return False
 
 
-def _check_dns(name_or_addr: str, fallback_name: str | None = None) -> ProtocolStatus:
+def _check_dns(name_or_addr: str, fallback_name: Optional[str] = None) -> ProtocolStatus:
     ts = time.time()
     s = (name_or_addr or "").strip()
     fb = (fallback_name or "").strip()
@@ -814,6 +889,7 @@ async def _host_checker_loop() -> None:
             # The dashboard's SYSTEM LOGS panel is line-based text; we broadcast
             # lightweight events over the existing websocket.
             host_name_by_id: dict[int, str] = {}
+            host_addr_by_id: dict[int, str] = {}
             for h in hosts:
                 try:
                     hid = int(getattr(h, "id", 0) or 0)
@@ -824,6 +900,7 @@ async def _host_checker_loop() -> None:
                 name = str(getattr(h, "name", "") or "").strip()
                 addr = str(getattr(h, "address", "") or "").strip()
                 host_name_by_id[hid] = name or addr or f"host-{hid}"
+                host_addr_by_id[hid] = addr
 
             async with _host_status_lock:
                 prev_statuses = dict(_host_status)
@@ -836,9 +913,29 @@ async def _host_checker_loop() -> None:
                     return "unknown"
 
             events: list[dict[str, Any]] = []
+            host_events: list[dict[str, Any]] = []
 
             def _add_event(level: str, message: str) -> None:
                 events.append({"type": "log", "ts": float(ts), "level": str(level), "message": str(message)})
+
+            def _add_host_event(host_id: int, level: str, check: str, status: str, message: str) -> None:
+                try:
+                    hid = int(host_id)
+                except Exception:
+                    return
+                host_events.append(
+                    {
+                        "type": "host_event",
+                        "ts": float(ts),
+                        "level": str(level),
+                        "host_id": hid,
+                        "host_name": host_name_by_id.get(hid, f"host-{hid}"),
+                        "address": host_addr_by_id.get(hid, ""),
+                        "check": str(check),
+                        "status": str(status),
+                        "message": str(message),
+                    }
+                )
 
             def _detail_line(proto_dump: Any) -> str:
                 """Best-effort human detail for a ProtocolStatus model_dump()."""
@@ -870,8 +967,10 @@ async def _host_checker_loop() -> None:
                     detail = _detail_line(st)
                     suffix = f": {detail}" if detail else ""
                     _add_event("CRIT", f"Host {name} unreachable (ICMP){suffix}")
+                    _add_host_event(int(hid), "CRIT", "icmp", "crit", detail or "unreachable")
                 elif prev_icmp == "crit" and new_icmp == "ok":
                     _add_event("INFO", f"Host {name} reachable (ICMP)")
+                    _add_host_event(int(hid), "INFO", "icmp", "ok", "reachable")
 
                 # Other protocols: log transitions into critical.
                 new_host_checks = checks_all.get(int(hid)) or {}
@@ -888,6 +987,7 @@ async def _host_checker_loop() -> None:
                         detail = _detail_line(new_host_checks.get(proto_key) or {})
                         suffix = f": {detail}" if detail else ""
                         _add_event("CRIT", f"Host {name} {proto_label} check failed{suffix}")
+                        _add_host_event(int(hid), "CRIT", proto_key, "crit", detail or "check failed")
 
             async with _host_status_lock:
                 _host_status_ts = ts
@@ -898,6 +998,14 @@ async def _host_checker_loop() -> None:
             # Broadcast host check events first so the UI can show the failure as it happens.
             for ev in events:
                 await broadcaster.broadcast(ev)
+
+            # Store + broadcast structured host events (Problems view).
+            if host_events:
+                async with _host_events_lock:
+                    for ev in host_events:
+                        _host_events.append(ev)
+                for ev in host_events:
+                    await broadcaster.broadcast(ev)
 
             # Push to connected clients (dashboard listens and updates buttons).
             await broadcaster.broadcast(
