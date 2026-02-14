@@ -1,0 +1,5 @@
+[siem] session_id=65587b97854c464bb3bd170a563663f4
+[siem] starting tcpdump (summary): /usr/sbin/tcpdump -i lo -n -tt -q -l -s 96
+tcpdump: lo: You don't have permission to perform this capture on that device
+(socket: Operation not permitted)
+[siem] tcpdump finished with code 1

@@ -1,0 +1,49 @@
+:root {
+  --ashd-bg: #0b1020;
+  --ashd-panel: rgba(255,255,255,.04);
+  --ashd-border: rgba(255,255,255,.10);
+}
+
+body {
+  background: var(--ashd-bg);
+}
+
+.pageHeader {
+  background:
+    radial-gradient(1200px 600px at 20% 0%, rgba(52, 211, 153, 0.20), transparent 60%),
+    radial-gradient(900px 420px at 70% 10%, rgba(59, 130, 246, 0.22), transparent 55%),
+    var(--ashd-bg);
+}
+
+.subtle { color: rgba(255,255,255,.70); }
+
+.card-ashd {
+  background: var(--ashd-panel);
+  border-color: var(--ashd-border);
+}
+
+.card-ashd .card-header {
+  border-bottom-color: var(--ashd-border);
+}
+
+a, a:hover { color: #93c5fd; }
+code { color: #a7f3d0; }
+
+.refShot {
+  background: rgba(0,0,0,.20);
+  border: 1px solid var(--ashd-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.refShot img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.badge-soft {
+  border: 1px solid var(--ashd-border);
+  background: rgba(255,255,255,.04);
+  font-weight: 600;
+}

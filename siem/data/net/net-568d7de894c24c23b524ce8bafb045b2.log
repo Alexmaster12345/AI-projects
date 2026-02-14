@@ -1,0 +1,6 @@
+[siem] session_id=568d7de894c24c23b524ce8bafb045b2
+[siem] starting tcpdump (pcap): /usr/sbin/tcpdump -i lo -n -tt -q -s 0 -U -w /home/alex/siem/data/net/net-568d7de894c24c23b524ce8bafb045b2.pcap
+[siem] writing pcap to: /home/alex/siem/data/net/net-568d7de894c24c23b524ce8bafb045b2.pcap
+tcpdump: lo: You don't have permission to perform this capture on that device
+(socket: Operation not permitted)
+[siem] tcpdump finished with code 1

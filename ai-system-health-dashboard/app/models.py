@@ -36,6 +36,14 @@ class HostCreate(HostBase):
     pass
 
 
+class HostUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    type: Optional[str] = None
+    tags: Optional[list[str]] = None
+    notes: Optional[str] = None
+
+
 class Host(HostBase):
     id: int
     is_active: bool = True

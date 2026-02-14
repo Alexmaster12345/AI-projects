@@ -27,6 +27,7 @@
             <a class="sideItem" href="/overview" data-label="Overview">Overview</a>
             <a class="sideItem" href="/#hosts" data-label="Hosts">Hosts</a>
             <a class="sideItem" href="/#maps" data-label="Maps">Maps</a>
+            <a class="sideItem sideProblems" href="#" data-label="Problems">Problems</a>
           </div>
 
           <div class="sideGroup">
@@ -88,7 +89,7 @@
 
             <section class="hostsCard hostWide">
               <div class="hostsCardTitle">Monitoring protocols</div>
-              <div class="hostProtoHelp muted">What to watch for (best-effort checks; some require services enabled on the host).</div>
+              <div class="hostProtoHelp muted">Live protocol checks (port/service reachability).</div>
               <div class="hostProtoGrid">
                 <div class="hostProtoRow">
                   <div class="pName">ICMP</div>
@@ -106,14 +107,45 @@
                   <div class="pMetric" id="pSnmp">—</div>
                 </div>
                 <div class="hostProtoRow">
-                  <div class="pName">NTP</div>
-                  <div class="pWhat">Clock skew / NTP server reachability (udp/123)</div>
-                  <div class="pMetric" id="pNtp">—</div>
+                  <div class="pName">Syslog</div>
+                  <div class="pWhat">Centralized event log management (udp/514)</div>
+                  <div class="pMetric" id="pSyslog">—</div>
                 </div>
                 <div class="hostProtoRow">
-                  <div class="pName">DNS</div>
-                  <div class="pWhat">Resolution errors</div>
-                  <div class="pMetric" id="pDns">—</div>
+                  <div class="pName">NetFlow</div>
+                  <div class="pWhat">Network flow analysis (udp/2055)</div>
+                  <div class="pMetric" id="pNetflow">—</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="hostsCard hostWide">
+              <div class="hostsCardTitle">Agent metrics</div>
+              <div class="hostProtoHelp muted">Live metrics from the host agent (if reporting).</div>
+              <div class="hostCharts">
+                <div class="chartContainer">
+                  <div class="chartTitle">CPU % <span id="cpuValue" class="chartValue">—</span></div>
+                  <canvas id="cpuChart" width="300" height="100"></canvas>
+                </div>
+                <div class="chartContainer">
+                  <div class="chartTitle">Memory % <span id="memValue" class="chartValue">—</span></div>
+                  <canvas id="memChart" width="300" height="100"></canvas>
+                </div>
+                <div class="chartContainer">
+                  <div class="chartTitle">Disk % <span id="diskValue" class="chartValue">—</span></div>
+                  <canvas id="diskChart" width="300" height="100"></canvas>
+                </div>
+                <div class="chartContainer">
+                  <div class="chartTitle">Load (1m) <span id="loadValue" class="chartValue">—</span></div>
+                  <canvas id="loadChart" width="300" height="100"></canvas>
+                </div>
+                <div class="chartContainer">
+                  <div class="chartTitle">Network sent (B/s) <span id="netSentValue" class="chartValue">—</span></div>
+                  <canvas id="netSentChart" width="300" height="100"></canvas>
+                </div>
+                <div class="chartContainer">
+                  <div class="chartTitle">Network recv (B/s) <span id="netRecvValue" class="chartValue">—</span></div>
+                  <canvas id="netRecvChart" width="300" height="100"></canvas>
                 </div>
               </div>
             </section>
@@ -121,6 +153,12 @@
             <section class="hostsCard hostWide">
               <div class="hostsCardTitle">Notes</div>
               <div id="hNotes" class="hostNotes muted">—</div>
+            </section>
+
+            <section class="hostsCard hostWide" id="problemsSection" style="display: none;">
+              <div class="hostsCardTitle">Problems</div>
+              <div class="hostProtoHelp muted">History of errors and warnings for this host.</div>
+              <div id="problemsList" class="problemsList"></div>
             </section>
           </div>
         </div>

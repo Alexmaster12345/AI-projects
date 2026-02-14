@@ -292,17 +292,436 @@ body {
 /* --- Views (single-page routing via body[data-view]) --- */
 /* Default to dashboard view if JS hasn't set anything yet. */
 #hostsView { display: none; }
+#inventoryView { display: none; }
+#racksView { display: none; }
 #mapsView { display: none; }
 
 body[data-view="hosts"] .hud { display: none; }
 body[data-view="hosts"] #hostsView { display: block; }
 
+body[data-view="inventory"] .hud { display: none; }
+body[data-view="inventory"] #inventoryView { display: block; }
+
+body[data-view="racks"] .hud { display: none; }
+body[data-view="racks"] #racksView { display: block; }
+
 body[data-view="maps"] .hud { display: none; }
 body[data-view="maps"] #mapsView { display: block; }
 
+/* --- Racks page --- */
+.racksView {
+  width: min(var(--container-width), 1200px);
+  margin: 0 auto;
+  padding: var(--frame-pad-y) var(--frame-pad-x);
+}
+
+.rackList {
+  display: grid;
+  gap: 10px;
+}
+
+.rackItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.20);
+}
+
+.rackItem.isActive {
+  border-color: rgba(110,231,255,0.25);
+  background: radial-gradient(420px 160px at 20% 20%, rgba(110,231,255,0.10), transparent 60%), rgba(0,0,0,0.22);
+}
+
+.rackMeta {
+  display: grid;
+  gap: 4px;
+}
+
+.rackName {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  font-size: 12px;
+}
+
+.rackSub {
+  font-size: 11px;
+}
+
+.shelvesWrap {
+  display: grid;
+  gap: 10px;
+  max-height: min(62vh, 520px);
+  overflow: auto;
+  border-radius: 14px;
+}
+
+.rackViz {
+  margin: 0 0 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(420px 220px at 25% 12%, rgba(110,231,255,0.08), transparent 60%),
+    rgba(0,0,0,0.18);
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,0.25),
+    inset 0 14px 30px rgba(0,0,0,0.35);
+}
+
+.racksPreviewCard {
+  margin-top: 20px;
+}
+
+.rackVizLarge {
+  padding: 16px;
+}
+
+.rackVizLarge .rackVizInner {
+  max-height: none;
+}
+
+.rackVizLarge .rackSlot {
+  padding: 12px 14px;
+}
+
+.rackVizInner {
+  display: grid;
+  gap: 8px;
+  max-height: min(34vh, 280px);
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.rackSlot {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.22);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rackSlot:hover {
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.26);
+}
+
+.rackSlot.isSelected {
+  border-color: rgba(110,231,255,0.30);
+  background: radial-gradient(420px 160px at 20% 20%, rgba(110,231,255,0.10), transparent 60%), rgba(0,0,0,0.24);
+}
+
+.rackSlotIdx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(110,231,255,0.18);
+  background: rgba(0,0,0,0.22);
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(233, 249, 255, 0.88);
+}
+
+.rackSlotLabel {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rackSlotLabelPrimary {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: rgba(233, 249, 255, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rackSlotLabelSecondary {
+  font-size: 11px;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rackSlotLeds {
+  width: 28px;
+  height: 10px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 15% 50%, rgba(61, 220, 151, 0.9) 0 30%, transparent 31%),
+    radial-gradient(circle at 50% 50%, rgba(255, 204, 0, 0.85) 0 30%, transparent 31%),
+    radial-gradient(circle at 85% 50%, rgba(255, 77, 109, 0.75) 0 30%, transparent 31%);
+  opacity: 0.65;
+}
+
+.rackSlot.isAdd {
+  border-style: dashed;
+  border-color: rgba(110,231,255,0.22);
+  background: rgba(0,0,0,0.16);
+}
+
+.rackSlot.isAdd .rackSlotLabel {
+  color: rgba(233, 249, 255, 0.70);
+  font-weight: 700;
+}
+
+.shelfRow {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.18);
+}
+
+.shelfIdx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(110,231,255,0.18);
+  background: rgba(0,0,0,0.22);
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(233, 249, 255, 0.88);
+}
+
+.shelfInput {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+  outline: none;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.shelfInput:hover {
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.32);
+}
+
+.shelfInput:focus {
+  border-color: rgba(110,231,255,0.4);
+  background: rgba(0,0,0,0.35);
+  box-shadow: 0 0 12px rgba(110,231,255,0.15);
+}
+
+/* --- Inventory page --- */
+.inventoryView {
+  width: min(var(--container-width), 1200px);
+  margin: 0 auto;
+  padding: var(--frame-pad-y) var(--frame-pad-x);
+}
+
+.invHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.invTitle {
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  font-size: 18px;
+}
+
+.invSub {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.invBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(110,231,255,0.18);
+  background: rgba(0,0,0,0.25);
+  color: rgba(233, 249, 255, 0.86);
+  font-size: 12px;
+}
+
+.invHero {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(110, 231, 255, 0.12);
+  background: rgba(15, 25, 55, 0.30);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.30);
+  margin-bottom: 18px;
+}
+
+@media (max-width: 980px) {
+  .invHero { grid-template-columns: 1fr; }
+}
+
+.invHeroLeft {
+  display: grid;
+  place-items: center;
+}
+
+.invRack {
+  width: 140px;
+  height: 170px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(220px 160px at 30% 20%, rgba(110,231,255,0.10), transparent 55%),
+    linear-gradient(to bottom, rgba(255,255,255,0.06), transparent 30%),
+    rgba(0,0,0,0.26);
+  box-shadow:
+    0 18px 60px rgba(0,0,0,0.45),
+    inset 0 0 0 1px rgba(0,0,0,0.28),
+    inset 0 14px 30px rgba(0,0,0,0.45);
+  position: relative;
+  overflow: hidden;
+}
+
+.invRackInner {
+  position: absolute;
+  inset: 14px;
+  border-radius: 12px;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.08), transparent 38%),
+    radial-gradient(220px 160px at 35% 18%, rgba(110,231,255,0.10), transparent 60%),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.10),
+      rgba(255,255,255,0.10) 1px,
+      transparent 1px,
+      transparent 16px
+    ),
+    rgba(0,0,0,0.28);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.06),
+    inset 0 10px 24px rgba(0,0,0,0.55);
+  opacity: 0.92;
+}
+
+.invRackInner::before {
+  content: "";
+  position: absolute;
+  inset: 8px 16px 8px 8px;
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0.22),
+      rgba(0,0,0,0.22) 10px,
+      rgba(255,255,255,0.04) 10px,
+      rgba(255,255,255,0.04) 12px,
+      transparent 12px,
+      transparent 18px
+    );
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.invRackInner::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  right: 7px;
+  bottom: 10px;
+  width: 6px;
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(61, 220, 151, 0.85) 0px,
+      rgba(61, 220, 151, 0.85) 2px,
+      transparent 2px,
+      transparent 18px
+    );
+  box-shadow:
+    0 0 10px rgba(61, 220, 151, 0.20),
+    0 0 18px rgba(120, 230, 255, 0.10);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.invHeroMain {
+  display: grid;
+  gap: 12px;
+}
+
+.invHeroStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.invGrid {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 20px;
+}
+
+@media (max-width: 980px) {
+  .invGrid { grid-template-columns: 1fr; }
+}
+
+.invCard {
+  background: rgba(15, 25, 55, 0.4);
+  border: 1px solid rgba(110, 231, 255, 0.12);
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.invSearchRow {
+  margin: 0 0 12px;
+}
+
+.invSearch {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+  outline: none;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.invSearch:hover {
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.32);
+}
+
+.invSearch:focus {
+  border-color: rgba(110,231,255,0.4);
+  background: rgba(0,0,0,0.35);
+  box-shadow: 0 0 12px rgba(110,231,255,0.15);
+}
+
 /* --- Hosts page --- */
 .hostsView {
-  width: min(var(--container-width), 1200px);
+  width: min(var(--container-width), 1600px);
   margin: 0 auto;
   padding: var(--frame-pad-y) var(--frame-pad-x);
 }
@@ -339,8 +758,13 @@ body[data-view="maps"] #mapsView { display: block; }
 
 .hostsGrid {
   display: grid;
-  grid-template-columns: 420px 1fr;
-  gap: var(--grid-gap);
+  grid-template-columns: minmax(360px, 520px) 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 1500px) {
+  .hostsView { width: min(var(--container-width), 1800px); }
+  .hostsGrid { grid-template-columns: minmax(420px, 620px) 1fr; }
 }
 
 @media (max-width: 980px) {
@@ -348,51 +772,96 @@ body[data-view="maps"] #mapsView { display: block; }
 }
 
 .hostsCard {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: var(--panel-pad);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+  background: rgba(15, 25, 55, 0.4);
+  border: 1px solid rgba(110, 231, 255, 0.12);
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
 
 .hostsCardTitle {
   font-weight: 900;
-  letter-spacing: 0.6px;
-  font-size: 12px;
-  margin-bottom: 12px;
-  color: color-mix(in srgb, var(--text) 88%, transparent);
+  letter-spacing: 0.8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  color: var(--text);
+  text-transform: capitalize;
 }
 
 .hostsFormGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 980px) {
+  .hostsFormGrid {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 14px;
+  }
 }
 
 .hostsField { display: grid; gap: 6px; }
 .hostsFieldWide { grid-column: 1 / -1; }
 
+.hostsField .k {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  display: block;
+  margin-bottom: 2px;
+}
+
 .hostsField input,
 .hostsField select,
 .hostsField textarea {
-  width: 100%;
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,0.20);
-  color: var(--text);
-  outline: none;
-  font-size: 12px;
+  width: 100% !important;
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  background: rgba(0,0,0,0.25) !important;
+  color: var(--text) !important;
+  outline: none !important;
+  font-size: 12px !important;
+  font-family: inherit !important;
+  transition: all 200ms ease !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  box-shadow: none !important;
 }
 
-.hostsField textarea { resize: vertical; min-height: 74px; }
+.hostsField input:hover,
+.hostsField select:hover,
+.hostsField textarea:hover {
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.32);
+}
 
-/* Some browsers render the opened <select> menu with a light system background,
-   but still inherit our light text color, resulting in unreadable options.
-   Force the option text to black for the Tags dropdown. */
+.hostsField input:focus,
+.hostsField select:focus,
+.hostsField textarea:focus {
+  border-color: rgba(110,231,255,0.4);
+  background: rgba(0,0,0,0.35);
+  box-shadow: 0 0 12px rgba(110,231,255,0.15);
+}
+
+.hostsField input::placeholder {
+  color: rgba(255,255,255,0.35);
+}
+
+.hostsField textarea { resize: vertical; min-height: 60px; }
+
 #hostTags option {
-  color: #000;
-  background: #fff;
+  color: var(--text) !important;
+  background: rgba(0,0,0,0.5) !important;
+  padding: 8px 12px;
+}
+
+#hostTags {
+  color-scheme: dark;
 }
 
 .hostsActions {
@@ -413,11 +882,22 @@ body[data-view="maps"] #mapsView { display: block; }
   font-size: 12px;
 }
 
-.hostsTable th,
-.hostsTable td {
-  padding: 10px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+.hostsTable th {
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(110,231,255,0.15);
   vertical-align: top;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text) 85%, transparent);
+}
+
+.hostsTable td {
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  vertical-align: middle;
+  font-size: 12px;
 }
 
 .hostsLink {
@@ -461,13 +941,24 @@ body[data-view="maps"] #mapsView { display: block; }
 }
 
 .hostsBtnSmall {
-  font-size: 12px;
-  padding: 7px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(0,0,0,0.20);
-  color: var(--text);
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,92,92,0.3);
+  background: rgba(255,50,60,0.12);
+  color: rgba(255,120,120,0.9);
   cursor: pointer;
+  font-weight: 600;
+  transition: all 150ms ease;
+}
+
+.hostsBtnSmall:hover {
+  background: rgba(255,50,60,0.2);
+  border-color: rgba(255,92,92,0.5);
+}
+
+.hostsBtnSmall:active {
+  transform: scale(0.95);
 }
 
 /* Hosts table: live protocol chips */
@@ -855,11 +1346,14 @@ header {
   background: rgba(0,0,0,0.22);
   backdrop-filter: blur(10px);
   padding: var(--panel-pad);
+  min-width: 0;
+  min-height: 0;
 }
 
 .leftTop {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .clock {
@@ -887,6 +1381,7 @@ header {
   padding: 10px;
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .spark .label {
@@ -903,6 +1398,10 @@ header {
   width: 100%;
   height: 48px;
   display: block;
+  border: 2px solid rgba(100, 200, 255, 0.5) !important;
+  background: rgba(10, 20, 40, 0.8) !important;
+  min-height: 48px;
+  image-rendering: pixelated;
 }
 
 .diag {
@@ -1082,6 +1581,40 @@ header {
   white-space: pre;
 }
 
+.diagHosts {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.diagHostBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(110,231,255,0.16);
+  background: rgba(0,0,0,0.20);
+  color: rgba(233, 249, 255, 0.92);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.diagHostBtn:hover {
+  border-color: rgba(110,231,255,0.28);
+  background: rgba(0,0,0,0.26);
+}
+
+.diagHostBtn .sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.62);
+}
+
 .cmd {
   padding: 12px 16px 16px;
   position: relative;
@@ -1126,10 +1659,26 @@ header {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 16%, transparent);
 }
 
+@keyframes hostCritBlink {
+  0%, 100% {
+    background: rgba(255, 77, 109, 0.06);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--crit) 16%, transparent),
+      0 0 0 0 rgba(255, 77, 109, 0.0);
+  }
+  50% {
+    background: rgba(255, 77, 109, 0.16);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--crit) 24%, transparent),
+      0 0 22px rgba(255, 77, 109, 0.20);
+  }
+}
+
 .hostBtn.crit {
   color: var(--crit);
   border-color: color-mix(in srgb, var(--crit) 55%, rgba(255,255,255,0.10));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--crit) 16%, transparent);
+  animation: hostCritBlink 1.1s ease-in-out infinite;
 }
 
 .hostBtn:focus-visible {

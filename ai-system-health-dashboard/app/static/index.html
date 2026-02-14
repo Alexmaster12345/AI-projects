@@ -4,8 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI System Diagnostic</title>
-    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260207_7" />
-    <script defer src="/static/assets/dashboard.js?v=20260207_7"></script>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=215" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script defer src="/static/assets/monitor.js?v=215"></script>
+    <script defer src="/static/assets/dashboard.js?v=215"></script>
   </head>
   <body>
     <div class="appShell" id="appShell">
@@ -37,6 +39,7 @@
           <div class="sideGroup">
             <div class="sideGroupTitle">Inventory</div>
             <a class="sideItem" href="#" data-action="inventory" data-label="Inventory">Inventory</a>
+            <a class="sideItem" href="#" data-action="racks" data-label="Racks">Racks</a>
           </div>
 
           <div class="sideGroup">
@@ -46,12 +49,22 @@
 
           <div class="sideGroup">
             <div class="sideGroupTitle">Configuration</div>
-            <a class="sideItem" href="#" data-action="configuration" data-label="Configuration">Configuration</a>
+            <a class="sideItem" href="#" data-action="hosts-groups" data-label="Host groups">Host groups</a>
+            <a class="sideItem" href="#" data-action="templates" data-label="Templates">Templates</a>
+            <a class="sideItem" href="#" data-action="event-correlation" data-label="Event correlation">Event correlation</a>
+            <a class="sideItem" href="#" data-action="discovery-config" data-label="Discovery">Discovery</a>
           </div>
 
           <div class="sideGroup">
             <div class="sideGroupTitle">Administration</div>
-            <a class="sideItem" href="#" data-action="administration" data-label="Administration">Administration</a>
+            <a class="sideItem" href="#" data-action="general" data-label="General">General</a>
+            <a class="sideItem" href="#" data-action="proxies" data-label="Proxies">Proxies</a>
+            <a class="sideItem" href="#" data-action="authentication" data-label="Authentication">Authentication</a>
+            <a class="sideItem" href="#" data-action="user-groups" data-label="User groups">User groups</a>
+            <a class="sideItem" href="#" data-action="users" data-label="Users">Users</a>
+            <a class="sideItem" href="#" data-action="media-types" data-label="Media types">Media types</a>
+            <a class="sideItem" href="#" data-action="scripts" data-label="Scripts">Scripts</a>
+            <a class="sideItem" href="#" data-action="queue" data-label="Queue">Queue</a>
           </div>
         </nav>
 
@@ -135,91 +148,113 @@
               </div>
 
               <div class="panel vitals">
-                <h3>CORE VITALS</h3>
-                <div class="kv">
-                  <div class="kvRow"><span class="k">CPU</span><span id="cpuV" class="v">—</span></div>
-                  <div class="kvRow"><span class="k">RAM</span><span id="ramV" class="v">—</span></div>
-                  <div class="kvRow"><span class="k">DISK</span><span id="diskV" class="v">—</span></div>
-                  <div class="kvRow"><span class="k">NETWORK</span><span id="netV" class="v">—</span></div>
-                  <div class="kvRow"><span class="k">NTP</span><span id="ntpV" class="v proto unknown">—</span></div>
-                  <div class="kvRow"><span class="k">ICMP</span><span id="icmpV" class="v proto unknown">—</span></div>
-                  <div class="kvRow"><span class="k">SNMP</span><span id="snmpV" class="v proto unknown">—</span></div>
-                  <div class="kvRow"><span class="k">NETFLOW</span><span id="netflowV" class="v proto unknown">—</span></div>
-                  <div class="kvRow"><span class="k">UPTIME</span><span id="uptimeV" class="v">—</span></div>
-                  <div class="kvRow"><span class="k">GPU</span><span id="gpuV" class="v">—</span></div>
+                <div class="vital">
+                  <div class="vitalTitle">CPU</div>
+                  <div id="cpuV" class="vitalValue">—</div>
+                </div>
+                <div class="vital">
+                  <div class="vitalTitle">RAM</div>
+                  <div id="ramV" class="vitalValue">—</div>
+                </div>
+                <div class="vital">
+                  <div class="vitalTitle">DISK</div>
+                  <div id="diskV" class="vitalValue">—</div>
+                </div>
+                <div class="vital">
+                  <div class="vitalTitle">UPTIME</div>
+                  <div id="uptimeV" class="vitalValue">—</div>
+                </div>
+                <div class="vital">
+                  <div class="vitalTitle">PROCESSES</div>
+                  <div id="procsV" class="vitalValue">—</div>
+                </div>
+                <div class="vital">
+                  <div class="vitalTitle">NETWORK</div>
+                  <div id="netV" class="vitalValue">—</div>
                 </div>
               </div>
             </div>
 
-            <div class="cmd">
+            <div class="cmd" aria-label="Hosts">
               <div class="cmdBar">
-                <div id="hostButtons" class="hostButtons" aria-label="Host status"></div>
-                <div class="prompt">user@system-monitor:~$</div>
-                <input id="cmd" placeholder="type a command (demo)…" />
+                <div class="hostButtons" id="dashHostButtons"></div>
               </div>
             </div>
           </div>
 
-          <!-- Hosts page (single-page view, toggled by dashboard.js via location.hash) -->
-          <section class="hostsView" id="hostsView" aria-label="Hosts">
+          <section id="hostsView" class="hostsView">
             <div class="hostsHeader">
               <div>
                 <div class="hostsTitle">Hosts</div>
                 <div class="hostsSub muted">Add and manage monitored hosts inventory (admin-only changes).</div>
               </div>
+              <button id="hostsRefreshBtn" class="hostsBtnSmall" type="button">Refresh</button>
             </div>
 
-            <div id="hostsErr" class="hostsErr" role="alert" style="display:none;"></div>
+            <div id="hostsErr" class="hostsErr" style="display:none;"></div>
 
             <div class="hostsGrid">
-              <form id="hostsForm" class="hostsCard" autocomplete="off">
-                <div class="hostsCardTitle">Add host</div>
-                <div class="hostsFormGrid">
-                  <label class="hostsField">
-                    <span class="k">Hostname</span>
-                    <input id="hostName" required placeholder="web-01" />
-                  </label>
-                  <label class="hostsField">
-                    <span class="k">IP Address</span>
-                    <input id="hostAddress" required placeholder="IP 10.0.0.10 or host.example" />
-                  </label>
-                  <label class="hostsField">
-                    <span class="k">Type</span>
-                    <input id="hostType" placeholder="Linux / Windows / Router…" />
-                  </label>
-                  <label class="hostsField">
-                    <span class="k">Tags</span>
-                    <select id="hostTags">
-                      <option value="" selected>—</option>
-                      <option value="Data center">Data center</option>
-                      <option value="Labs">Labs</option>
+              <div class="hostsCard">
+                <div class="hostsCardTitle">Add Host</div>
+                <form id="hostsForm" class="hostsFormGrid">
+                  <div class="hostsField">
+                    <div class="k">Hostname</div>
+                    <input id="hostName" type="text" placeholder="web-01" required />
+                  </div>
+                  <div class="hostsField">
+                    <div class="k">IP Address</div>
+                    <input id="hostAddress" type="text" placeholder="192.0.2.10 or host.example" required />
+                  </div>
+                  <div class="hostsField">
+                    <div class="k">Type</div>
+                    <select id="hostType">
+                      <option value="">Linux / Windows / Router...</option>
+                      <option value="Linux">Linux</option>
+                      <option value="Windows">Windows</option>
+                      <option value="Router">Router</option>
+                      <option value="Switch">Switch</option>
+                      <option value="Firewall">Firewall</option>
+                      <option value="VM">VM</option>
+                      <option value="Service">Service</option>
                     </select>
-                  </label>
-                  <label class="hostsField hostsFieldWide">
-                    <span class="k">Notes</span>
-                    <textarea id="hostNotes" rows="3" placeholder="Optional notes…"></textarea>
-                  </label>
-                </div>
-                <div class="hostsActions">
-                  <button id="hostsAddBtn" class="btn" type="submit">Add host</button>
-                  <span class="muted">Only admins can add/delete hosts.</span>
-                </div>
-              </form>
+                  </div>
+                  <div class="hostsField">
+                    <div class="k">Tags</div>
+                    <select id="hostTags">
+                      <option value="">—</option>
+                      <option value="Labs">Labs</option>
+                      <option value="Production">Production</option>
+                      <option value="Staging">Staging</option>
+                      <option value="Critical">Critical</option>
+                      <option value="Database">Database</option>
+                      <option value="Web">Web</option>
+                      <option value="Networking">Networking</option>
+                    </select>
+                  </div>
+                  <div class="hostsField hostsFieldWide">
+                    <div class="k">Notes</div>
+                    <textarea id="hostNotes" placeholder="Optional notes..."></textarea>
+                  </div>
+                  <div class="hostsActions">
+                    <button id="hostSubmit" class="hostsBtnSmall" type="submit">Add host</button>
+                    <div class="muted" style="font-size: 12px;">Only admins can add/delete hosts.</div>
+                  </div>
+                </form>
+              </div>
 
               <div class="hostsCard">
-                <div class="hostsCardTitle">Host list</div>
-                <div id="hostsEmpty" class="hostsEmpty muted" style="display:none;">No hosts yet.</div>
-                <div class="hostsTableWrap">
-                  <table class="hostsTable" aria-label="Hosts table">
+                <div class="hostsCardTitle">Host List</div>
+                <div id="hostsTableWrap" class="hostsTableWrap">
+                  <div id="hostsEmpty" class="hostsEmpty muted">No hosts yet. Add one to get started.</div>
+                  <table id="hostsTable" class="hostsTable" style="display:none;">
                     <thead>
                       <tr>
                         <th>Hostname</th>
                         <th>Address</th>
                         <th>Type</th>
                         <th>Tags</th>
-                        <th>Protocols</th>
                         <th>Notes</th>
-                        <th style="width:1%;">Actions</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody id="hostsTbody"></tbody>
@@ -229,30 +264,165 @@
             </div>
           </section>
 
-          <!-- Maps page (single-page view, toggled by dashboard.js via location.hash) -->
-          <section class="mapsView" id="mapsView" aria-label="Maps">
-            <div class="mapsHeader">
+          <section id="inventoryView" class="inventoryView">
+            <div class="invHeader">
               <div>
-                <div class="mapsTitle">Maps</div>
-                <div class="mapsSub muted">Topology view based on added hosts.</div>
+                <div class="invTitle">Inventory</div>
+                <div class="invSub muted">Track equipment list (admin-managed).</div>
               </div>
+              <div class="invBadge"><span class="dot"></span><span id="invState">ready</span> · <span id="invRole">admin</span></div>
+            </div>
 
-              <div class="mapsToolbar" role="toolbar" aria-label="Maps toolbar">
-                <label class="mapsSelect">
-                  <span class="k">Minimum severity</span>
-                  <select id="mapSeverity">
-                    <option value="not_classified" selected>Not classified (default)</option>
-                    <option value="info">Info</option>
-                    <option value="warn">Warning</option>
-                    <option value="crit">Critical</option>
-                  </select>
-                </label>
-
-                <button id="mapEditBtn" class="hostsBtnSmall" type="button">Edit map</button>
+            <div class="invHero">
+              <div class="invHeroLeft" aria-hidden="true">
+                <div class="invRack">
+                  <div class="invRackInner"></div>
+                </div>
+              </div>
+              <div class="invHeroMain">
+                <div class="invHeroText muted">Keep track of servers, racks, switches, and other equipment. Use categories + locations to stay sane when everything is black and 1U tall.</div>
+                <div class="invHeroStats">
+                  <div>
+                    <div class="muted" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Items</div>
+                    <div id="invCount" style="font-weight: 800;">0</div>
+                  </div>
+                  <div>
+                    <div class="muted" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Last refresh</div>
+                    <div id="invLastRefresh" style="font-weight: 800;">—</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div id="mapsErr" class="hostsErr" role="alert" style="display:none;"></div>
+            <div class="invGrid">
+              <div class="invCard">
+                <div class="hostsCardTitle">Add inventory (admin)</div>
+                <form id="invForm" class="hostsFormGrid">
+                  <div class="hostsField">
+                    <div class="k">Name</div>
+                    <input id="invName" type="text" placeholder="e.g. srv-01" required />
+                  </div>
+                  <div class="hostsField">
+                    <div class="k">Category</div>
+                    <input id="invCategory" type="text" placeholder="e.g. Server" />
+                  </div>
+                  <div class="hostsField">
+                    <div class="k">Location</div>
+                    <input id="invLocation" type="text" placeholder="e.g. Rack A" />
+                  </div>
+                  <div class="hostsField">
+                    <div class="k">Qty</div>
+                    <input id="invQty" type="number" min="0" step="1" placeholder="1" />
+                  </div>
+                  <div class="hostsField hostsFieldWide">
+                    <div class="k">Notes</div>
+                    <input id="invNotes" type="text" placeholder="e.g. warranty, etc." />
+                  </div>
+                  <div class="hostsActions">
+                    <button id="invAddBtn" class="hostsBtnSmall" type="submit">Add</button>
+                    <button id="invRefreshBtn" class="hostsBtnSmall" type="button">Refresh</button>
+                  </div>
+                </form>
+                <div class="muted" style="font-size: 12px; margin-top: 8px;">Only admins can add/remove inventory items.</div>
+                <div id="invErr" class="hostsErr" style="display:none;"></div>
+              </div>
+
+              <div class="invCard">
+                <div class="hostsCardTitle">Items</div>
+                <div class="invSearchRow">
+                  <input id="invSearch" class="invSearch" type="text" placeholder="Search name/category/location…" autocomplete="off" />
+                </div>
+                <div class="hostsTableWrap">
+                  <div id="invEmpty" class="hostsEmpty muted">No inventory items yet.</div>
+                  <table id="invTable" class="hostsTable" style="display:none;">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Location</th>
+                        <th>Qty</th>
+                        <th>Notes</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="invTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="racksView" class="racksView">
+            <div class="invHeader">
+              <div>
+                <div class="invTitle">Racks</div>
+                <div class="invSub muted">Manage racks and shelf layout (admin-managed).</div>
+              </div>
+              <div class="invBadge"><span class="dot"></span><span id="racksState">ready</span> · <span id="racksRole">admin</span></div>
+            </div>
+
+            <div class="invGrid">
+              <div class="invCard">
+                <div class="hostsCardTitle">Racks</div>
+                <form id="rackForm" class="hostsFormGrid">
+                  <div class="hostsField">
+                    <div class="k">Rack name</div>
+                    <input id="rackName" type="text" placeholder="e.g. Rack A" required />
+                  </div>
+                  <div class="hostsField">
+                    <div class="k">Location</div>
+                    <input id="rackLocation" type="text" placeholder="e.g. DC1 / Row 2" />
+                  </div>
+                  <div class="hostsField">
+                    <div class="k">Shelves</div>
+                    <input id="rackShelves" type="number" min="1" step="1" placeholder="12" />
+                  </div>
+                  <div class="hostsActions">
+                    <button class="hostsBtnSmall" type="submit">Add rack</button>
+                    <button id="rackRefreshBtn" class="hostsBtnSmall" type="button">Refresh</button>
+                  </div>
+                </form>
+                <div id="rackErr" class="hostsErr" style="display:none;"></div>
+                <div class="hostsCardTitle" style="margin-top: 18px;">Rack list</div>
+                <div id="rackList" class="rackList"></div>
+                <div id="rackEmpty" class="hostsEmpty muted">No racks yet.</div>
+              </div>
+
+              <div class="invCard">
+                <div class="hostsCardTitle" id="rackEditorTitle">Shelves</div>
+                <div class="hostsActions" style="margin: 0 0 12px;">
+                  <button id="shelfAddBtn" class="hostsBtnSmall" type="button">+ Shelf</button>
+                  <button id="shelfRemoveBtn" class="hostsBtnSmall" type="button">- Shelf</button>
+                </div>
+                <div id="rackViz" class="rackViz" aria-label="Rack visualization"></div>
+                <div id="shelvesWrap" class="shelvesWrap"></div>
+                <div id="shelvesHint" class="muted" style="font-size: 12px; margin-top: 10px;">Select a rack to edit shelves.</div>
+              </div>
+            </div>
+
+            <div class="invCard racksPreviewCard">
+              <div class="hostsCardTitle" id="rackPreviewTitle">Rack preview</div>
+              <div id="rackPreview" class="rackViz rackVizLarge" aria-label="Rack preview"></div>
+            </div>
+          </section>
+
+          <section id="mapsView" class="mapsView">
+            <div class="mapsHeader">
+              <div>
+                <div class="mapsTitle">Network Map</div>
+                <div class="mapsSub muted">Visualize host topology</div>
+              </div>
+              <div class="mapsToolbar">
+                <div class="mapsSelect">
+                  <select id="mapLayout">
+                    <option value="auto">Auto layout</option>
+                    <option value="manual">Manual edit</option>
+                  </select>
+                </div>
+                <button id="mapAutoDiscover" class="hostsBtnSmall" type="button">Auto-discover</button>
+                <button id="mapSave" class="hostsBtnSmall" type="button" style="display:none;">Save layout</button>
+              </div>
+            </div>
 
             <div id="mapStage" class="mapStage" aria-label="Map stage">
               <svg id="mapSvg" class="mapSvg" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet"></svg>
@@ -262,7 +432,7 @@
                 <button id="mapMenuCopyAddr" class="mapMenuItem" type="button" role="menuitem">Copy address</button>
               </div>
             </div>
-            <div id="mapHint" class="mapHint muted">Tip: click a host to focus it. Enable “Edit map” to drag nodes and save layout.</div>
+            <div id="mapHint" class="mapHint muted">Tip: click a host to focus it. Enable "Edit map" to drag nodes and save layout.</div>
           </section>
         </div>
       </div>

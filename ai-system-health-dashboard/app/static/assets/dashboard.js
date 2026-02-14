@@ -1,1707 +1,1275 @@
-/* Dashboard behavior extracted from index.html and enhanced:
-   - URL prefs (theme/layout/density/wallboard)
-   - Canvas resize handling for crisp sparklines on any resolution/DPI
-   - WebSocket reconnect without accumulating timers
-*/
-
 (() => {
-  const MAX = 72;
-  const series = { cpu: [], mem: [], disk: [], gpuHealth: [] };
-  const logs = [];
+  'use strict';
 
-  function applyPrefs() {
-    const q = new URLSearchParams(location.search);
-
-    const theme = (q.get('theme') || 'midnight').toLowerCase();
-    const density = (q.get('density') || 'cozy').toLowerCase();
-    const layout = (q.get('layout') || 'split').toLowerCase();
-    const wallboard = q.get('wallboard') === '1' || q.get('wallboard') === 'true';
-
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.density = density;
-    document.documentElement.dataset.layout = layout;
-    if (wallboard) document.body.classList.add('wallboard');
-  }
-
+  // === Utility functions ===
   function $(id) {
-    const el = document.getElementById(id);
-    if (!el) throw new Error(`Missing element: #${id}`);
-    return el;
+    return document.getElementById(id);
   }
 
-  const els = {
-    date: $('date'),
-    time: $('time'),
-    subtime: $('subtime'),
-    host: $('host'),
-    conn: $('conn'),
-
-    cpuLbl: $('cpuLbl'),
-    memLbl: $('memLbl'),
-    diskLbl: $('diskLbl'),
-    gpuHealthLbl: $('gpuHealthLbl'),
-
-    diagStatus: $('diagStatus'),
-    diagText: $('diagText'),
-    diagRec: $('diagRec'),
-    pill: $('pill'),
-    logLines: $('logLines'),
-    actionBtn: $('actionBtn'),
-    dangerBtn: $('dangerBtn'),
-
-    cpuV: $('cpuV'),
-    ramV: $('ramV'),
-    diskV: $('diskV'),
-    netV: $('netV'),
-    uptimeV: $('uptimeV'),
-    gpuV: $('gpuV'),
-
-    ntpV: $('ntpV'),
-    icmpV: $('icmpV'),
-    snmpV: $('snmpV'),
-    netflowV: $('netflowV'),
-
-    cmd: $('cmd'),
-
-    hostButtons: $('hostButtons'),
-
-    cpuSpark: $('cpuSpark'),
-    memSpark: $('memSpark'),
-    diskSpark: $('diskSpark'),
-    gpuHealthSpark: $('gpuHealthSpark'),
-
-    // Hosts view
-    hostsView: $('hostsView'),
-    hostsErr: $('hostsErr'),
-    hostsForm: $('hostsForm'),
-    hostName: $('hostName'),
-    hostAddress: $('hostAddress'),
-    hostType: $('hostType'),
-    hostTags: $('hostTags'),
-    hostNotes: $('hostNotes'),
-    hostsAddBtn: $('hostsAddBtn'),
-    hostsEmpty: $('hostsEmpty'),
-    hostsTbody: $('hostsTbody'),
-
-    // Maps view
-    mapsView: $('mapsView'),
-    mapsErr: $('mapsErr'),
-    mapStage: $('mapStage'),
-    mapSvg: $('mapSvg'),
-    mapEditBtn: $('mapEditBtn'),
-    mapSeverity: $('mapSeverity'),
-    mapHint: $('mapHint'),
-    mapMenu: $('mapMenu'),
-    mapMenuGoHosts: $('mapMenuGoHosts'),
-    mapMenuCopyAddr: $('mapMenuCopyAddr'),
-  };
-
-  // --- Host status buttons (command bar) ---
-  let hostInventory = [];
-  let hostStatuses = {}; // { [id]: {status, checked_ts, latency_ms, message} }
-  let hostChecks = {}; // { [id]: { icmp, ssh, dns, snmp, ntp, ... } }
-  let pendingFocusHostId = null;
-  let hostsListCache = []; // last rendered hosts list (for live row updates)
-
-  const PROTO_LABELS = {
-    icmp: 'ICMP',
-    ssh: 'SSH',
-    dns: 'DNS',
-    snmp: 'SNMP',
-    ntp: 'NTP',
-  };
-
-  function toLowerStatus(st) {
+  // === Racks (localStorage) ===
+  function getRacks() {
     try {
-      return (st && st.status ? String(st.status) : 'unknown').toLowerCase();
-    } catch (_) {
-      return 'unknown';
+      const raw = localStorage.getItem('ashd_racks');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
     }
   }
 
-  function hasCriticalProtocol(checks) {
-    if (!checks || typeof checks !== 'object') return false;
-    for (const k of Object.keys(PROTO_LABELS)) {
-      const s = toLowerStatus(checks[k]);
-      if (s === 'crit') return true;
+  function setRacks(racks) {
+    try {
+      localStorage.setItem('ashd_racks', JSON.stringify(Array.isArray(racks) ? racks : []));
+    } catch (e) {
+      // ignore
     }
-    return false;
   }
 
-  function summarizeCriticalProtocols(checks) {
+  function _mkShelves(n) {
     const out = [];
-    if (!checks || typeof checks !== 'object') return out;
-    for (const k of Object.keys(PROTO_LABELS)) {
-      const st = checks[k] || null;
-      const s = toLowerStatus(st);
-      if (s !== 'crit') continue;
-      const msg = st && st.message ? String(st.message).trim() : '';
-      out.push({ key: k, label: PROTO_LABELS[k], message: msg });
+    const count = Math.max(1, Number(n || 12));
+    for (let i = 1; i <= count; i++) {
+      out.push({ pos: i, label: '' });
     }
     return out;
   }
 
-  function sevFromProtoStatus(st) {
-    const s = toLowerStatus(st);
-    if (s === 'ok') return 'ok';
-    if (s === 'crit') return 'crit';
-    return 'unknown';
-  }
+  function renderRacks() {
+    if (!rackList) return;
+    const racks = getRacks();
+    rackList.innerHTML = '';
 
-  function shortProtoLabel(st) {
-    const s = toLowerStatus(st);
-    if (s === 'ok') return 'OK';
-    if (s === 'crit') return 'CRIT';
-    return 'UNK';
-  }
-
-  function renderProtoChipsInto(td, checks) {
-    td.innerHTML = '';
-    td.classList.add('hostsProto');
-
-    const c = checks && typeof checks === 'object' ? checks : null;
-    if (!c) {
-      td.textContent = '—';
+    if (!racks.length) {
+      if (rackEmpty) rackEmpty.style.display = 'block';
+      selectedRackId = null;
+      renderShelves();
       return;
     }
 
-    const keys = ['icmp', 'ssh', 'snmp', 'ntp', 'dns'];
-    for (const k of keys) {
-      const st = c[k] || null;
-      const sev = sevFromProtoStatus(st);
-      const chip = document.createElement('span');
-      chip.className = `hostsProtoChip ${sev}`;
-      chip.textContent = `${PROTO_LABELS[k] || k.toUpperCase()} ${shortProtoLabel(st)}`;
-      try {
-        const msg = st && st.message ? String(st.message).trim() : '';
-        const lat = st && st.latency_ms != null ? `${Math.round(Number(st.latency_ms))} ms` : '';
-        const titleParts = [];
-        titleParts.push(`${PROTO_LABELS[k] || k.toUpperCase()}: ${toLowerStatus(st).toUpperCase()}`);
-        if (lat) titleParts.push(lat);
-        if (msg) titleParts.push(msg);
-        chip.title = titleParts.join(' · ');
-      } catch (_) {
-        // ignore
-      }
-      td.appendChild(chip);
+    if (rackEmpty) rackEmpty.style.display = 'none';
+
+    if (selectedRackId == null || !racks.some(r => String(r?.id) === String(selectedRackId))) {
+      selectedRackId = racks[0].id;
     }
-  }
 
-  function updateHostsProtocolsLive() {
-    if (!els.hostsTbody) return;
-    const rows = els.hostsTbody.querySelectorAll('tr[data-host-id]');
-    for (const row of rows) {
-      const hostId = row.getAttribute('data-host-id');
-      if (!hostId) continue;
-      const td = row.querySelector('td.hostsProto');
-      if (!td) continue;
-      const checks = hostChecks ? hostChecks[String(hostId)] || hostChecks[hostId] : null;
-      renderProtoChipsInto(td, checks);
+    for (const r of racks) {
+      const row = document.createElement('div');
+      row.className = 'rackItem' + (String(r?.id) === String(selectedRackId) ? ' isActive' : '');
+
+      const meta = document.createElement('div');
+      meta.className = 'rackMeta';
+      const t = document.createElement('div');
+      t.className = 'rackName';
+      t.textContent = String(r?.name ?? '—');
+      const sub = document.createElement('div');
+      sub.className = 'rackSub muted';
+      const loc = String(r?.location ?? '').trim();
+      const shelfCount = Array.isArray(r?.shelves) ? r.shelves.length : 0;
+      sub.textContent = `${loc ? loc + ' · ' : ''}${shelfCount} shelves`;
+      meta.appendChild(t);
+      meta.appendChild(sub);
+      meta.style.cursor = 'pointer';
+      meta.onclick = () => {
+        selectedRackId = r.id;
+        renderRacks();
+      };
+
+      const actions = document.createElement('div');
+      const del = document.createElement('button');
+      del.className = 'hostsBtnSmall';
+      del.textContent = 'Delete';
+      del.style.padding = '4px 8px';
+      del.style.fontSize = '11px';
+      del.onclick = () => {
+        const cur = getRacks();
+        const next = cur.filter(x => String(x?.id) !== String(r?.id));
+        setRacks(next);
+        if (String(selectedRackId) === String(r?.id)) selectedRackId = null;
+        renderRacks();
+      };
+      actions.appendChild(del);
+
+      row.appendChild(meta);
+      row.appendChild(actions);
+      rackList.appendChild(row);
     }
+
+    renderShelves();
   }
 
-  function normalizeStatus(st) {
-    const s = (st && st.status ? String(st.status) : 'unknown').toLowerCase();
-    // Requirement: green when no problems, red when issues.
-    return s === 'ok' ? 'ok' : 'crit';
-  }
+  function renderShelves() {
+    if (!shelvesWrap) return;
+    const racks = getRacks();
+    const rack = racks.find(r => String(r?.id) === String(selectedRackId));
 
-  function renderHostButtons() {
-    if (!els.hostButtons) return;
-    const list = Array.isArray(hostInventory) ? hostInventory : [];
-    els.hostButtons.innerHTML = '';
-
-    if (!list.length) {
-      // Keep the bar compact when there are no hosts.
+    shelvesWrap.innerHTML = '';
+    if (!rack) {
+      if (rackEditorTitle) rackEditorTitle.textContent = 'Shelves';
+      if (shelvesHint) shelvesHint.style.display = 'block';
+      if (rackViz) rackViz.innerHTML = '';
+      if (rackPreview) rackPreview.innerHTML = '';
+      if (rackPreviewTitle) rackPreviewTitle.textContent = 'Rack preview';
       return;
     }
 
-    for (const h of list) {
-      const id = h && h.id;
-      if (id == null) continue;
-      const name = (h && h.name) || (h && h.address) || `host-${String(id)}`;
+    if (shelvesHint) shelvesHint.style.display = 'none';
+    if (rackEditorTitle) rackEditorTitle.textContent = `Shelves · ${String(rack.name ?? '')}`;
 
-      const raw = hostStatuses ? hostStatuses[String(id)] || hostStatuses[id] : null;
-      const checks = hostChecks ? hostChecks[String(id)] || hostChecks[id] : null;
-      // Treat any critical protocol as an issue for the dashboard summary.
-      const sev = (normalizeStatus(raw) === 'ok' && !hasCriticalProtocol(checks)) ? 'ok' : 'crit';
+    const shelves = Array.isArray(rack.shelves) ? rack.shelves : [];
+    for (const sh of shelves) {
+      const row = document.createElement('div');
+      row.className = 'shelfRow';
 
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `hostBtn ${sev}`;
-      btn.textContent = String(name);
-      const tipParts = [];
-      if (raw && raw.message) tipParts.push(String(raw.message));
-      if (raw && raw.latency_ms != null) tipParts.push(`${Math.round(Number(raw.latency_ms))} ms`);
-      const crits = summarizeCriticalProtocols(checks);
-      if (crits.length) {
-        tipParts.push(`Protocols: ${crits.map((c) => c.label).join(', ')}`);
-        // Include the first message as a hint (avoid huge tooltips).
-        if (crits[0].message) tipParts.push(crits[0].message.slice(0, 160));
-      }
-      btn.title = tipParts.join(' · ') || (sev === 'ok' ? 'OK' : 'Issue');
-      btn.setAttribute('aria-label', `${name}: ${sev === 'ok' ? 'ok' : 'issue'}`);
+      const idx = document.createElement('div');
+      idx.className = 'shelfIdx';
+      idx.textContent = String(sh?.pos ?? '—');
 
-      btn.addEventListener('click', () => {
-        try {
-          location.href = `/host/${encodeURIComponent(String(id))}`;
-        } catch (_) {
-          // ignore
+      const input = document.createElement('input');
+      input.className = 'shelfInput';
+      input.setAttribute('data-pos', String(sh?.pos ?? ''));
+      input.placeholder = 'Shelf label / contents…';
+      input.value = String(sh?.label ?? '');
+      input.oninput = () => {
+        const cur = getRacks();
+        const r = cur.find(x => String(x?.id) === String(selectedRackId));
+        if (!r || !Array.isArray(r.shelves)) return;
+        const target = r.shelves.find(x => Number(x?.pos) === Number(sh?.pos));
+        if (!target) return;
+        target.label = String(input.value ?? '');
+        setRacks(cur);
+        renderRackViz();
+      };
+
+      row.appendChild(idx);
+      row.appendChild(input);
+      shelvesWrap.appendChild(row);
+    }
+
+    renderRackViz();
+    renderRackPreview();
+  }
+
+  function renderRackViz() {
+    if (!rackViz) return;
+    const racks = getRacks();
+    const rack = racks.find(r => String(r?.id) === String(selectedRackId));
+    rackViz.innerHTML = '';
+    if (!rack) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'rackVizInner';
+
+    const shelves = Array.isArray(rack.shelves) ? rack.shelves : [];
+    const sorted = [...shelves].sort((a, b) => Number(b?.pos || 0) - Number(a?.pos || 0));
+    for (const sh of sorted) {
+      const slot = document.createElement('div');
+      slot.className = 'rackSlot' + (Number(selectedShelfPos) === Number(sh?.pos) ? ' isSelected' : '');
+
+      const idx = document.createElement('div');
+      idx.className = 'rackSlotIdx';
+      idx.textContent = String(sh?.pos ?? '—');
+
+      const label = document.createElement('div');
+      label.className = 'rackSlotLabel';
+      const txt = String(sh?.label ?? '').trim();
+      const primary = document.createElement('div');
+      primary.className = 'rackSlotLabelPrimary';
+      primary.textContent = txt ? txt : 'Empty';
+      const secondary = document.createElement('div');
+      secondary.className = 'rackSlotLabelSecondary muted';
+      secondary.textContent = `Shelf ${String(sh?.pos ?? '—')}`;
+      label.appendChild(primary);
+      label.appendChild(secondary);
+
+      const leds = document.createElement('div');
+      leds.className = 'rackSlotLeds';
+
+      slot.appendChild(idx);
+      slot.appendChild(label);
+      slot.appendChild(leds);
+
+      slot.onclick = () => {
+        selectedShelfPos = Number(sh?.pos);
+        const input = document.querySelector(`.shelfInput[data-pos="${String(sh?.pos)}"]`);
+        if (input && typeof input.focus === 'function') {
+          input.focus();
+          if (typeof input.scrollIntoView === 'function') {
+            input.scrollIntoView({ block: 'center' });
+          }
         }
-      });
-      els.hostButtons.appendChild(btn);
+        renderRackViz();
+      };
+
+      wrap.appendChild(slot);
     }
+
+    const addSlot = document.createElement('div');
+    addSlot.className = 'rackSlot isAdd';
+    const addIdx = document.createElement('div');
+    addIdx.className = 'rackSlotIdx';
+    addIdx.textContent = '+';
+    const addLbl = document.createElement('div');
+    addLbl.className = 'rackSlotLabel';
+    addLbl.textContent = 'Add shelf';
+    const addLeds = document.createElement('div');
+    addLeds.className = 'rackSlotLeds';
+    addLeds.style.opacity = '0.25';
+    addSlot.appendChild(addIdx);
+    addSlot.appendChild(addLbl);
+    addSlot.appendChild(addLeds);
+    addSlot.onclick = () => {
+      addShelf();
+      const cur = getRacks();
+      const r = cur.find(x => String(x?.id) === String(selectedRackId));
+      const last = r && Array.isArray(r.shelves) && r.shelves.length ? r.shelves[r.shelves.length - 1] : null;
+      selectedShelfPos = last ? Number(last.pos) : null;
+      renderShelves();
+    };
+    wrap.appendChild(addSlot);
+
+    rackViz.appendChild(wrap);
   }
 
-  function focusHostRow(hostId) {
-    if (!hostId) return;
-    const idStr = String(hostId);
-    const row = els.hostsTbody ? els.hostsTbody.querySelector(`tr[data-host-id="${CSS.escape(idStr)}"]`) : null;
-    if (!row) return;
+  function renderRackPreview() {
+    if (!rackPreview) return;
+    const racks = getRacks();
+    const rack = racks.find(r => String(r?.id) === String(selectedRackId));
+    rackPreview.innerHTML = '';
+    if (!rack) return;
 
+    const nm = String(rack?.name ?? '').trim();
+    const loc = String(rack?.location ?? '').trim();
+    if (rackPreviewTitle) {
+      rackPreviewTitle.textContent = `Rack preview${nm ? ' · ' + nm : ''}${loc ? ' · ' + loc : ''}`;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'rackVizInner';
+
+    const shelves = Array.isArray(rack.shelves) ? rack.shelves : [];
+    const sorted = [...shelves].sort((a, b) => Number(b?.pos || 0) - Number(a?.pos || 0));
+    for (const sh of sorted) {
+      const slot = document.createElement('div');
+      slot.className = 'rackSlot';
+
+      const idx = document.createElement('div');
+      idx.className = 'rackSlotIdx';
+      idx.textContent = String(sh?.pos ?? '—');
+
+      const label = document.createElement('div');
+      label.className = 'rackSlotLabel';
+      const txt = String(sh?.label ?? '').trim();
+      const primary = document.createElement('div');
+      primary.className = 'rackSlotLabelPrimary';
+      primary.textContent = txt ? txt : 'Empty';
+      const secondary = document.createElement('div');
+      secondary.className = 'rackSlotLabelSecondary muted';
+      secondary.textContent = `Shelf ${String(sh?.pos ?? '—')}`;
+      label.appendChild(primary);
+      label.appendChild(secondary);
+
+      const leds = document.createElement('div');
+      leds.className = 'rackSlotLeds';
+
+      slot.appendChild(idx);
+      slot.appendChild(label);
+      slot.appendChild(leds);
+
+      wrap.appendChild(slot);
+    }
+
+    rackPreview.appendChild(wrap);
+  }
+
+  function addRack(e) {
+    if (e) e.preventDefault();
+    if (!rackName) return;
+    const name = String(rackName.value ?? '').trim();
+    if (!name) {
+      showError(rackErr, 'Rack name is required');
+      return;
+    }
+    const nShelves = rackShelves && String(rackShelves.value ?? '').trim() !== '' ? Number(rackShelves.value) : 12;
+    const rack = {
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      name,
+      location: rackLocation ? String(rackLocation.value ?? '').trim() : '',
+      shelves: _mkShelves(nShelves),
+      created_ts: Date.now(),
+    };
+    const cur = getRacks();
+    setRacks([rack, ...cur]);
+    selectedRackId = rack.id;
+    selectedShelfPos = null;
+    if (rackForm) rackForm.reset();
+    showError(rackErr, '');
+    renderRacks();
+    renderRackPreview();
+  }
+
+  function addShelf() {
+    const cur = getRacks();
+    const r = cur.find(x => String(x?.id) === String(selectedRackId));
+    if (!r) return;
+    if (!Array.isArray(r.shelves)) r.shelves = [];
+    const nextPos = r.shelves.length ? Math.max(...r.shelves.map(x => Number(x?.pos || 0))) + 1 : 1;
+    r.shelves.push({ pos: nextPos, label: '' });
+    setRacks(cur);
+    selectedShelfPos = nextPos;
+    renderShelves();
+    renderRacks();
+    renderRackPreview();
+  }
+
+  function removeShelf() {
+    const cur = getRacks();
+    const r = cur.find(x => String(x?.id) === String(selectedRackId));
+    if (!r || !Array.isArray(r.shelves) || r.shelves.length <= 1) return;
+    r.shelves.pop();
+    setRacks(cur);
+    selectedShelfPos = null;
+    renderShelves();
+    renderRacks();
+    renderRackPreview();
+  }
+
+  function setText(el, text) {
+    if (el) el.textContent = String(text ?? '');
+  }
+
+  function pushSystemLog(level, message) {
     try {
-      row.classList.add('hostsRowFocus');
-      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      setTimeout(() => {
-        try {
-          row.classList.remove('hostsRowFocus');
-        } catch (_) {
-          // ignore
-        }
-      }, 2200);
-    } catch (_) {
+      const key = 'ashd_system_logs_v1';
+      const raw = localStorage.getItem(key);
+      const cur = raw ? JSON.parse(raw) : [];
+      const logs = Array.isArray(cur) ? cur : [];
+      logs.push({ ts: Date.now() / 1000, level: String(level || 'info'), message: String(message || '') });
+      const trimmed = logs.slice(-60);
+      localStorage.setItem(key, JSON.stringify(trimmed));
+    } catch (e) {
       // ignore
     }
   }
 
-  async function refreshHostButtonsInventory() {
+  async function fetchJson(url, opts = {}) {
     try {
-      const hosts = await fetchJson('/api/hosts');
-      hostInventory = Array.isArray(hosts) ? hosts : [];
-      renderHostButtons();
-    } catch (_) {
-      hostInventory = [];
-      renderHostButtons();
-    }
-  }
-
-  async function refreshHostButtonsStatusOnce() {
-    try {
-      const r = await fetchJson('/api/hosts/status');
-      hostStatuses = (r && r.statuses && typeof r.statuses === 'object') ? r.statuses : {};
-      hostChecks = (r && r.checks && typeof r.checks === 'object') ? r.checks : {};
-      renderHostButtons();
-      updateHostsProtocolsLive();
-    } catch (_) {
-      // ignore; WS may deliver statuses.
-    }
-  }
-
-  function setupHostButtons() {
-    refreshHostButtonsInventory();
-    refreshHostButtonsStatusOnce();
-    // Keep inventory fresh (new hosts / deletes).
-    setInterval(refreshHostButtonsInventory, 60_000);
-    // Fallback status poll in case WS is blocked; host checker runs server-side.
-    setInterval(refreshHostButtonsStatusOnce, 20_000);
-  }
-
-  function setView(view) {
-    document.body.dataset.view = view || 'dashboard';
-
-    // Update sidebar current item.
-    try {
-      const sideNav = document.getElementById('sideNav');
-      if (sideNav) {
-        const items = sideNav.querySelectorAll('a.sideItem[data-action]');
-        for (const it of items) {
-          const a = it.getAttribute('data-action') || '';
-          if (a === 'dashboard' && (view === 'dashboard' || !view)) it.setAttribute('aria-current', 'page');
-          else if (a === 'hosts' && view === 'hosts') it.setAttribute('aria-current', 'page');
-          else if (a === 'maps' && view === 'maps') it.setAttribute('aria-current', 'page');
-          else it.removeAttribute('aria-current');
-        }
+      const finalOpts = {
+        credentials: 'same-origin',
+        ...opts,
+      };
+      const resp = await fetch(url, finalOpts);
+      if (!resp.ok) {
+        const err = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${err}`);
       }
-    } catch (_) {
+      return await resp.json();
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // === Elements ===
+  const hostsView = $('hostsView');
+  const inventoryView = $('inventoryView');
+  const racksView = $('racksView');
+  const mapsView = $('mapsView');
+  const hostsForm = $('hostsForm');
+  const hostsErr = $('hostsErr');
+  const mapsErr = $('mapsErr');
+  const hostsTable = $('hostsTable');
+  const hostsTbody = $('hostsTbody');
+  const hostsEmpty = $('hostsEmpty');
+  const mapSvg = $('mapSvg');
+  const mapLayoutSel = $('mapLayout');
+  const mapAutoDiscoverBtn = $('mapAutoDiscover');
+
+  const invForm = $('invForm');
+  const invErr = $('invErr');
+  const invName = $('invName');
+  const invCategory = $('invCategory');
+  const invLocation = $('invLocation');
+  const invQty = $('invQty');
+  const invNotes = $('invNotes');
+  const invRefreshBtn = $('invRefreshBtn');
+  const invSearch = $('invSearch');
+  const invTable = $('invTable');
+  const invTbody = $('invTbody');
+  const invEmpty = $('invEmpty');
+  const invCount = $('invCount');
+  const invLastRefresh = $('invLastRefresh');
+
+  const rackForm = $('rackForm');
+  const rackErr = $('rackErr');
+  const rackName = $('rackName');
+  const rackLocation = $('rackLocation');
+  const rackShelves = $('rackShelves');
+  const rackRefreshBtn = $('rackRefreshBtn');
+  const rackList = $('rackList');
+  const rackEmpty = $('rackEmpty');
+  const rackEditorTitle = $('rackEditorTitle');
+  const rackViz = $('rackViz');
+  const rackPreview = $('rackPreview');
+  const rackPreviewTitle = $('rackPreviewTitle');
+  const shelvesWrap = $('shelvesWrap');
+  const shelvesHint = $('shelvesHint');
+  const shelfAddBtn = $('shelfAddBtn');
+  const shelfRemoveBtn = $('shelfRemoveBtn');
+
+  // === Hosts Management ===
+  let hostsData = [];
+  let editingHostId = null;
+  let mapSelectedHostId = null;
+  let selectedRackId = null;
+  let selectedShelfPos = null;
+
+  // === Inventory (localStorage) ===
+  function getInventoryItems() {
+    try {
+      const raw = localStorage.getItem('ashd_inventory_items');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function setInventoryItems(items) {
+    try {
+      localStorage.setItem('ashd_inventory_items', JSON.stringify(Array.isArray(items) ? items : []));
+    } catch (e) {
       // ignore
     }
   }
 
-  async function fetchJson(url, opts) {
-    const r = await fetch(url, opts);
-    if (r.status === 401) {
-      // Not authenticated; bounce to login.
-      try {
-        location.href = '/login';
-      } catch (_) {
-        // ignore
-      }
-      throw new Error('Not authenticated');
-    }
-    let data = null;
+  function formatLocalTs(ts) {
     try {
-      data = await r.json();
-    } catch (_) {
-      data = null;
+      const d = new Date(ts);
+      return d.toLocaleString();
+    } catch (e) {
+      return '—';
     }
-    if (!r.ok) {
-      const msg = data && data.detail ? String(data.detail) : `HTTP ${r.status}`;
-      const err = new Error(msg);
-      err.status = r.status;
-      throw err;
-    }
-    return data;
   }
 
-  function setHostsError(msg) {
-    if (!msg) {
-      els.hostsErr.style.display = 'none';
-      els.hostsErr.textContent = '';
+  function renderInventory() {
+    if (!invTbody) return;
+    const q = (invSearch && invSearch.value ? String(invSearch.value) : '').trim().toLowerCase();
+    const all = getInventoryItems();
+    const items = q
+      ? all.filter(it => {
+          const n = String(it?.name ?? '').toLowerCase();
+          const c = String(it?.category ?? '').toLowerCase();
+          const l = String(it?.location ?? '').toLowerCase();
+          return n.includes(q) || c.includes(q) || l.includes(q);
+        })
+      : all;
+
+    invTbody.innerHTML = '';
+    if (invCount) invCount.textContent = String(all.length);
+    if (invLastRefresh) invLastRefresh.textContent = formatLocalTs(Date.now());
+
+    if (!items.length) {
+      if (invEmpty) invEmpty.style.display = 'block';
+      if (invTable) invTable.style.display = 'none';
       return;
     }
-    els.hostsErr.style.display = '';
-    els.hostsErr.textContent = String(msg);
-  }
 
-  function renderHosts(hosts) {
-    const list = Array.isArray(hosts) ? hosts : [];
-    hostsListCache = list;
-    els.hostsTbody.innerHTML = '';
+    if (invEmpty) invEmpty.style.display = 'none';
+    if (invTable) invTable.style.display = 'table';
 
-    if (!list.length) {
-      els.hostsEmpty.style.display = '';
-      return;
-    }
-    els.hostsEmpty.style.display = 'none';
-
-    for (const h of list) {
+    for (const it of items) {
       const tr = document.createElement('tr');
-      try {
-        if (h && h.id != null) tr.setAttribute('data-host-id', String(h.id));
-      } catch (_) {
-        // ignore
-      }
-
-      const name = (h && h.name) || '—';
-      const address = (h && h.address) || '—';
-      const type = (h && h.type) || '—';
-      const notes = (h && h.notes) || '';
-      const tags = Array.isArray(h && h.tags) ? h.tags : [];
 
       const tdName = document.createElement('td');
-      const hostId = h && h.id != null ? String(h.id) : null;
-      if (hostId) {
-        const a = document.createElement('a');
-        a.className = 'hostsLink';
-        a.href = `/host/${encodeURIComponent(hostId)}`;
-        a.textContent = name;
-        tdName.appendChild(a);
-      } else {
-        tdName.textContent = name;
-      }
+      tdName.textContent = String(it?.name ?? '—');
+      tr.appendChild(tdName);
 
-      const tdAddr = document.createElement('td');
-      tdAddr.textContent = address;
+      const tdCat = document.createElement('td');
+      tdCat.textContent = String(it?.category ?? '—');
+      tr.appendChild(tdCat);
 
-      const tdType = document.createElement('td');
-      tdType.textContent = type;
+      const tdLoc = document.createElement('td');
+      tdLoc.textContent = String(it?.location ?? '—');
+      tr.appendChild(tdLoc);
 
-      const tdTags = document.createElement('td');
-      if (tags.length) {
-        for (const t of tags) {
-          const span = document.createElement('span');
-          span.className = 'hostsTag';
-          span.textContent = String(t);
-          tdTags.appendChild(span);
-        }
-      } else {
-        tdTags.textContent = '—';
-      }
+      const tdQty = document.createElement('td');
+      tdQty.textContent = String((it?.qty ?? '') === '' ? '—' : it.qty);
+      tr.appendChild(tdQty);
 
       const tdNotes = document.createElement('td');
-      tdNotes.textContent = notes || '—';
-
-      const tdProto = document.createElement('td');
-      tdProto.className = 'hostsProto';
-      if (hostId) {
-        const checks = hostChecks ? hostChecks[String(hostId)] || hostChecks[hostId] : null;
-        renderProtoChipsInto(tdProto, checks);
-      } else {
-        tdProto.textContent = '—';
-      }
-
-      const tdAct = document.createElement('td');
-
-      if (hostId) {
-        const mon = document.createElement('a');
-        mon.className = 'hostsBtnSmall';
-        mon.href = `/host/${encodeURIComponent(hostId)}`;
-        mon.textContent = 'Monitor';
-        tdAct.appendChild(mon);
-      }
-
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'hostsBtnSmall danger';
-      btn.textContent = 'Delete';
-      btn.addEventListener('click', async () => {
-        setHostsError('');
-        const id = h && h.id;
-        if (id == null) return;
-        try {
-          await fetchJson(`/api/admin/hosts/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
-          await refreshHosts();
-        } catch (e) {
-          setHostsError(e && e.message ? e.message : 'Delete failed');
-        }
-      });
-      tdAct.appendChild(btn);
-
-      tr.appendChild(tdName);
-      tr.appendChild(tdAddr);
-      tr.appendChild(tdType);
-      tr.appendChild(tdTags);
-      tr.appendChild(tdProto);
+      tdNotes.textContent = String(it?.notes ?? '—');
+      tdNotes.className = 'muted';
+      tdNotes.style.fontSize = '11px';
       tr.appendChild(tdNotes);
-      tr.appendChild(tdAct);
-      els.hostsTbody.appendChild(tr);
-    }
 
-    if (pendingFocusHostId != null) {
-      const id = pendingFocusHostId;
-      pendingFocusHostId = null;
-      focusHostRow(id);
-    }
-  }
-
-  async function refreshHosts() {
-    try {
-      const hosts = await fetchJson('/api/hosts');
-      renderHosts(hosts);
-    } catch (e) {
-      renderHosts([]);
-      setHostsError(e && e.message ? e.message : 'Failed to load hosts');
-    }
-  }
-
-  // --- Maps (SVG) ---
-  let mapEdit = false;
-  let mapFocusedId = null;
-  let mapMenuHost = null;
-  let mapPositions = null;
-
-  function setMapsError(msg) {
-    if (!msg) {
-      els.mapsErr.style.display = 'none';
-      els.mapsErr.textContent = '';
-      return;
-    }
-    els.mapsErr.style.display = '';
-    els.mapsErr.textContent = String(msg);
-  }
-
-  function loadMapPositions() {
-    if (mapPositions) return mapPositions;
-    try {
-      const raw = localStorage.getItem('ashd_map_positions');
-      const parsed = raw ? JSON.parse(raw) : {};
-      mapPositions = parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (_) {
-      mapPositions = {};
-    }
-    return mapPositions;
-  }
-
-  function saveMapPositions() {
-    try {
-      localStorage.setItem('ashd_map_positions', JSON.stringify(mapPositions || {}));
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  function hostStatus(host) {
-    // Until real per-host checks exist, treat active hosts as OK.
-    // Allow user to force critical via tag/type for demo parity.
-    const tags = Array.isArray(host && host.tags) ? host.tags.map((t) => String(t).toLowerCase()) : [];
-    const t = String((host && host.type) || '').toLowerCase();
-    if (tags.includes('disabled') || tags.includes('crit') || t.includes('disabled') || t.includes('crit')) return 'crit';
-    if (host && host.is_active === false) return 'crit';
-    return 'ok';
-  }
-
-  function clearSvg(svg) {
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
-  }
-
-  function svgEl(name, attrs) {
-    const el = document.createElementNS('http://www.w3.org/2000/svg', name);
-    if (attrs) {
-      for (const k of Object.keys(attrs)) {
-        el.setAttribute(k, String(attrs[k]));
-      }
-    }
-    return el;
-  }
-
-  function getSvgPointFromEvent(svg, evt) {
-    const pt = svg.createSVGPoint();
-    pt.x = evt.clientX;
-    pt.y = evt.clientY;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return { x: 0, y: 0 };
-    const p = pt.matrixTransform(ctm.inverse());
-    return { x: p.x, y: p.y };
-  }
-
-  function clamp(v, lo, hi) {
-    return Math.max(lo, Math.min(hi, v));
-  }
-
-  function hideMapMenu() {
-    els.mapMenu.style.display = 'none';
-    mapMenuHost = null;
-  }
-
-  async function renderMap() {
-    setMapsError('');
-    hideMapMenu();
-
-    let hosts = [];
-    try {
-      hosts = await fetchJson('/api/hosts');
-    } catch (e) {
-      setMapsError(e && e.message ? e.message : 'Failed to load hosts');
-      hosts = [];
-    }
-
-    const svg = els.mapSvg;
-    clearSvg(svg);
-
-    // Background grid (subtle)
-    const bg = svgEl('g');
-    for (let x = 0; x <= 1000; x += 100) {
-      bg.appendChild(svgEl('line', { x1: x, y1: 0, x2: x, y2: 640, stroke: 'rgba(255,255,255,0.04)', 'stroke-width': 1 }));
-    }
-    for (let y = 0; y <= 640; y += 80) {
-      bg.appendChild(svgEl('line', { x1: 0, y1: y, x2: 1000, y2: y, stroke: 'rgba(255,255,255,0.04)', 'stroke-width': 1 }));
-    }
-    svg.appendChild(bg);
-
-    const center = { x: 500, y: 260 };
-    const positions = loadMapPositions();
-
-    // Compute node positions.
-    const nodes = [];
-    nodes.push({
-      kind: 'server',
-      id: 'server',
-      name: 'ASHD server',
-      address: '127.0.0.1',
-      status: 'unknown',
-      x: center.x,
-      y: center.y,
-    });
-
-    const ringR = 240;
-    const count = Array.isArray(hosts) ? hosts.length : 0;
-    for (let i = 0; i < count; i++) {
-      const h = hosts[i];
-      const hid = h && h.id != null ? String(h.id) : `idx_${i}`;
-      const saved = positions && positions[hid];
-
-      let x = center.x + ringR * Math.cos((i / Math.max(1, count)) * Math.PI * 2);
-      let y = center.y + (ringR * 0.72) * Math.sin((i / Math.max(1, count)) * Math.PI * 2);
-      if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
-        x = clamp(saved.x * 1000, 60, 940);
-        y = clamp(saved.y * 640, 60, 580);
-      }
-
-      nodes.push({
-        kind: 'host',
-        id: hid,
-        rawId: h && h.id,
-        name: (h && h.name) || `host-${hid}`,
-        address: (h && h.address) || '—',
-        type: (h && h.type) || '',
-        tags: Array.isArray(h && h.tags) ? h.tags : [],
-        notes: (h && h.notes) || '',
-        status: hostStatus(h),
-        x,
-        y,
-      });
-    }
-
-    // Links
-    const linksG = svgEl('g');
-    svg.appendChild(linksG);
-    for (const n of nodes) {
-      if (n.kind !== 'host') continue;
-      const line = svgEl('line', { x1: center.x, y1: center.y, x2: n.x, y2: n.y, class: 'mapLink' });
-      if (mapFocusedId && n.id !== mapFocusedId) {
-        line.setAttribute('stroke', 'rgba(255,255,255,0.10)');
-      }
-      linksG.appendChild(line);
-    }
-
-    // Nodes
-    const nodesG = svgEl('g');
-    svg.appendChild(nodesG);
-
-    function addNode(n) {
-      const g = svgEl('g', { class: `mapNode ${n.status || 'unknown'}` });
-      g.dataset.id = String(n.id);
-      g.dataset.kind = String(n.kind);
-      g.setAttribute('transform', `translate(${n.x},${n.y})`);
-
-      const r = n.kind === 'server' ? 70 : 56;
-      g.appendChild(svgEl('circle', { cx: 0, cy: 0, r }));
-
-      // Title
-      const t1 = svgEl('text', { x: 0, y: -6, 'text-anchor': 'middle' });
-      t1.textContent = String(n.name).slice(0, 22);
-      g.appendChild(t1);
-
-      // Subtitle
-      const t2 = svgEl('text', { x: 0, y: 14, 'text-anchor': 'middle', class: 'sub' });
-      t2.textContent = n.kind === 'server' ? String(n.address) : String(n.address).slice(0, 26);
-      g.appendChild(t2);
-
-      // Badge / status
-      const badge = svgEl('text', { x: 0, y: 34, 'text-anchor': 'middle', class: 'badge' });
-      badge.textContent = (n.status || 'unknown').toUpperCase();
-      g.appendChild(badge);
-
-      const title = svgEl('title');
-      title.textContent = `${n.name}\n${n.address}`;
-      g.appendChild(title);
-
-      // Interaction
-      g.addEventListener('click', () => {
-        if (n.kind === 'host') {
-          mapFocusedId = n.id;
-          renderMap();
-        }
-      });
-
-      g.addEventListener('contextmenu', (evt) => {
-        evt.preventDefault();
-        if (n.kind !== 'host') return;
-        mapMenuHost = n;
-        const rect = els.mapStage.getBoundingClientRect();
-        const x = clamp(evt.clientX - rect.left, 6, rect.width - 6);
-        const y = clamp(evt.clientY - rect.top, 6, rect.height - 6);
-        els.mapMenu.style.left = `${x}px`;
-        els.mapMenu.style.top = `${y}px`;
-        els.mapMenu.style.display = '';
-      });
-
-      // Drag in edit mode
-      if (n.kind === 'host') {
-        let dragging = false;
-        let pointerId = null;
-
-        function onDown(evt) {
-          if (!mapEdit) return;
-          dragging = true;
-          pointerId = evt.pointerId;
-          try {
-            g.setPointerCapture(pointerId);
-          } catch (_) {
-            // ignore
-          }
-        }
-
-        function onMove(evt) {
-          if (!dragging || !mapEdit) return;
-          const p = getSvgPointFromEvent(svg, evt);
-          n.x = clamp(p.x, 60, 940);
-          n.y = clamp(p.y, 60, 580);
-          g.setAttribute('transform', `translate(${n.x},${n.y})`);
-          // Update link in place by re-rendering links only is more complex; simplest: re-render whole map on drop.
-        }
-
-        async function onUp() {
-          if (!dragging) return;
-          dragging = false;
-          pointerId = null;
-          // Persist normalized position
-          const pos = loadMapPositions();
-          pos[String(n.id)] = { x: n.x / 1000, y: n.y / 640 };
-          mapPositions = pos;
-          saveMapPositions();
-          await renderMap();
-        }
-
-        g.addEventListener('pointerdown', onDown);
-        g.addEventListener('pointermove', onMove);
-        g.addEventListener('pointerup', onUp);
-        g.addEventListener('pointercancel', onUp);
-      }
-
-      nodesG.appendChild(g);
-    }
-
-    for (const n of nodes) {
-      // If a node is focused, de-emphasize others by forcing unknown styling? Keep simple.
-      if (mapFocusedId && n.kind === 'host' && n.id !== mapFocusedId) {
-        // no-op; links already dimmed
-      }
-      addNode(n);
-    }
-
-    // Empty state hint
-    if (!count) {
-      const g = svgEl('g');
-      const t = svgEl('text', { x: 500, y: 520, 'text-anchor': 'middle', fill: 'rgba(233,249,255,0.72)', 'font-size': 14 });
-      t.textContent = 'No hosts yet. Add hosts first, then come back to Maps.';
-      g.appendChild(t);
-      svg.appendChild(g);
-    }
-  }
-
-  function setupMaps() {
-    // Close menu on any click outside
-    document.addEventListener('click', (e) => {
-      const t = e.target;
-      if (els.mapMenu.style.display === 'none') return;
-      if (t && (els.mapMenu.contains(t) || (els.mapStage && els.mapStage.contains(t) && t.closest && t.closest('#mapMenu')))) return;
-      hideMapMenu();
-    });
-
-    els.mapStage.addEventListener('contextmenu', (e) => {
-      // Right-click on empty stage closes menu
-      const tgt = e.target;
-      if (!tgt || !(tgt.closest && tgt.closest('.mapNode'))) {
-        hideMapMenu();
-      }
-    });
-
-    els.mapEditBtn.addEventListener('click', async () => {
-      mapEdit = !mapEdit;
-      els.mapEditBtn.textContent = mapEdit ? 'Editing…' : 'Edit map';
-      await renderMap();
-    });
-
-    els.mapMenuGoHosts.addEventListener('click', () => {
-      hideMapMenu();
-      try {
-        location.hash = 'hosts';
-      } catch (_) {
-        // ignore
-      }
-      routeFromHash();
-    });
-
-    els.mapMenuCopyAddr.addEventListener('click', async () => {
-      const addr = mapMenuHost && mapMenuHost.address ? String(mapMenuHost.address) : '';
-      hideMapMenu();
-      if (!addr) return;
-      try {
-        await navigator.clipboard.writeText(addr);
-      } catch (_) {
-        // ignore
-      }
-    });
-
-    els.mapSeverity.addEventListener('change', () => {
-      // placeholder for future severity filtering
-      renderMap();
-    });
-  }
-
-  function parseTags(s) {
-    // Tags are currently a dropdown (single-select). Keep this helper flexible
-    // in case we switch back to comma-separated input later.
-    const v = String(s || '').trim();
-    if (!v) return [];
-    if (!v.includes(',')) return [v];
-
-    const raw = v
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean);
-    const seen = new Set();
-    const out = [];
-    for (const t of raw) {
-      const k = t.toLowerCase();
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(t);
-    }
-    return out;
-  }
-
-  function setupHosts() {
-    if (!els.hostsForm) return;
-    els.hostsForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      setHostsError('');
-
-      const payload = {
-        name: String(els.hostName.value || '').trim(),
-        address: String(els.hostAddress.value || '').trim(),
-        type: String(els.hostType.value || '').trim() || null,
-        tags: parseTags(els.hostTags.value),
-        notes: String(els.hostNotes.value || '').trim() || null,
+      const tdActions = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.className = 'hostsBtnSmall';
+      delBtn.style.padding = '4px 8px';
+      delBtn.style.fontSize = '11px';
+      delBtn.onclick = () => {
+        const cur = getInventoryItems();
+        const next = cur.filter(x => String(x?.id ?? '') !== String(it?.id ?? ''));
+        setInventoryItems(next);
+        renderInventory();
       };
-      if (!payload.name || !payload.address) {
-        setHostsError('Name and Address are required.');
-        return;
-      }
+      tdActions.appendChild(delBtn);
+      tr.appendChild(tdActions);
 
-      try {
-        els.hostsAddBtn.disabled = true;
-        await fetchJson('/api/admin/hosts', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        els.hostName.value = '';
-        els.hostAddress.value = '';
-        els.hostType.value = '';
-        try {
-          els.hostTags.value = '';
-        } catch (_) {
-          // ignore
-        }
-        els.hostNotes.value = '';
-
-        await refreshHosts();
-      } catch (e2) {
-        setHostsError(e2 && e2.message ? e2.message : 'Add host failed');
-      } finally {
-        els.hostsAddBtn.disabled = false;
-      }
-    });
+      invTbody.appendChild(tr);
+    }
   }
 
-  function routeFromHash() {
-    const h = (location.hash || '').toLowerCase();
-    if (h === '#hosts') {
-      setView('hosts');
-      refreshHosts();
+  function addInventoryItem(e) {
+    if (e) e.preventDefault();
+    if (!invName) return;
+    const name = String(invName.value ?? '').trim();
+    if (!name) {
+      showError(invErr, 'Name is required');
       return;
     }
-    if (h === '#maps') {
-      setView('maps');
-      renderMap();
-      return;
-    }
-    setView('dashboard');
+
+    const item = {
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      name,
+      category: invCategory ? String(invCategory.value ?? '').trim() : '',
+      location: invLocation ? String(invLocation.value ?? '').trim() : '',
+      qty: invQty && String(invQty.value ?? '').trim() !== '' ? Number(invQty.value) : '',
+      notes: invNotes ? String(invNotes.value ?? '').trim() : '',
+      created_ts: Date.now(),
+    };
+
+    const cur = getInventoryItems();
+    setInventoryItems([item, ...cur]);
+    if (invForm) invForm.reset();
+    showError(invErr, '');
+    renderInventory();
   }
 
-  // --- Sidebar UX (Zabbix-style menu) ---
-  function setupSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const sideToggle = document.getElementById('sideToggle');
-    const sideSearch = document.getElementById('sideSearch');
-    const sideNav = document.getElementById('sideNav');
-
-    if (!sidebar) return;
-
-    const supportsHover =
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(hover:hover) and (pointer:fine)').matches;
-    const isDesktop =
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(min-width: 981px)').matches;
-
-    // Auto-hide sidebar on desktop: collapse to a thin left edge when mouse isn't near.
-    // (Mobile uses the drawer toggle instead.)
-    if (supportsHover && isDesktop) {
-      document.body.classList.add('sidebarAutoHide');
-    }
-
-    // Collapse mode removed: ensure any previously saved preference can't
-    // leave the UI stuck in a collapsed state with no control to expand.
-    document.body.classList.remove('sidebarCollapsed');
+  function getMapLinks() {
     try {
-      localStorage.removeItem('ashd_sidebar_collapsed');
-    } catch (_) {
+      const raw = localStorage.getItem('ashd_map_links');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function setMapLinks(links) {
+    try {
+      localStorage.setItem('ashd_map_links', JSON.stringify(Array.isArray(links) ? links : []));
+    } catch (e) {
       // ignore
     }
+  }
 
-    function setOpen(open) {
-      document.body.classList.toggle('sidebarOpen', !!open);
+  function isManualMapLayout() {
+    return !!(mapLayoutSel && mapLayoutSel.value === 'manual');
+  }
+
+  function isLinkingEnabled() {
+    return true;
+  }
+
+  function _linkKey(a, b) {
+    const sa = String(a);
+    const sb = String(b);
+    return sa < sb ? `${sa}|${sb}` : `${sb}|${sa}`;
+  }
+
+  async function loadHosts() {
+    try {
+      hostsData = await fetchJson('/api/hosts');
+      renderHostsTable();
+      renderMapView();
+    } catch (e) {
+      showError(hostsErr, `Failed to load hosts: ${e.message}`);
+    }
+  }
+
+  function renderHostsTable() {
+    if (!hostsTbody) return;
+    
+    hostsTbody.innerHTML = '';
+    
+    if (hostsData.length === 0) {
+      if (hostsEmpty) hostsEmpty.style.display = 'block';
+      if (hostsTable) hostsTable.style.display = 'none';
+      return;
+    }
+    
+    if (hostsEmpty) hostsEmpty.style.display = 'none';
+    if (hostsTable) hostsTable.style.display = 'table';
+    
+    for (const host of hostsData) {
+      const tr = document.createElement('tr');
+
+      const isEditing = String(editingHostId) === String(host.id);
+      
+      // Hostname
+      const tdName = document.createElement('td');
+      if (isEditing) {
+        const input = document.createElement('input');
+        input.value = host.name || '';
+        input.style.width = '100%';
+        input.className = 'shelfInput';
+        input.id = `edit_name_${host.id}`;
+        tdName.appendChild(input);
+      } else {
+        const nameLink = document.createElement('a');
+        nameLink.href = `/host/${host.id}`;
+        nameLink.textContent = host.name || '—';
+        nameLink.style.color = '#78e6ff';
+        nameLink.style.textDecoration = 'none';
+        tdName.appendChild(nameLink);
+      }
+      tr.appendChild(tdName);
+      
+      // Address
+      const tdAddr = document.createElement('td');
+      if (isEditing) {
+        const input = document.createElement('input');
+        input.value = host.address || '';
+        input.style.width = '100%';
+        input.className = 'shelfInput';
+        input.id = `edit_addr_${host.id}`;
+        tdAddr.appendChild(input);
+      } else {
+        tdAddr.textContent = host.address || '—';
+      }
+      tr.appendChild(tdAddr);
+      
+      // Type
+      const tdType = document.createElement('td');
+      if (isEditing) {
+        const input = document.createElement('input');
+        input.value = host.type || '';
+        input.style.width = '100%';
+        input.className = 'shelfInput';
+        input.id = `edit_type_${host.id}`;
+        tdType.appendChild(input);
+      } else {
+        tdType.textContent = host.type || '—';
+      }
+      tr.appendChild(tdType);
+      
+      // Tags
+      const tdTags = document.createElement('td');
+      const tags = Array.isArray(host.tags) ? host.tags : [];
+      if (isEditing) {
+        const input = document.createElement('input');
+        input.value = tags.join(', ');
+        input.style.width = '100%';
+        input.className = 'shelfInput';
+        input.id = `edit_tags_${host.id}`;
+        tdTags.appendChild(input);
+      } else {
+        if (tags.length) {
+          const tagsContainer = document.createElement('div');
+          tagsContainer.style.display = 'flex';
+          tagsContainer.style.flexWrap = 'wrap';
+          tagsContainer.style.gap = '6px';
+          for (const tag of tags) {
+            const tagEl = document.createElement('span');
+            tagEl.className = 'hostsTag';
+            tagEl.textContent = tag;
+            tagsContainer.appendChild(tagEl);
+          }
+          tdTags.appendChild(tagsContainer);
+        } else {
+          tdTags.textContent = '—';
+        }
+      }
+      tr.appendChild(tdTags);
+      
+      // Notes
+      const tdNotes = document.createElement('td');
+      if (isEditing) {
+        const input = document.createElement('input');
+        input.value = host.notes || '';
+        input.style.width = '100%';
+        input.className = 'shelfInput';
+        input.id = `edit_notes_${host.id}`;
+        tdNotes.appendChild(input);
+      } else {
+        tdNotes.textContent = host.notes ? host.notes.substring(0, 30) + (host.notes.length > 30 ? '...' : '') : '—';
+        tdNotes.style.fontSize = '11px';
+        tdNotes.className = 'muted';
+      }
+      tr.appendChild(tdNotes);
+      
+      // Actions
+      const tdActions = document.createElement('td');
+      if (isEditing) {
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        saveBtn.className = 'hostsBtnSmall';
+        saveBtn.style.padding = '4px 8px';
+        saveBtn.style.fontSize = '11px';
+        saveBtn.onclick = async () => {
+          await saveHostEdits(host.id);
+        };
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.className = 'hostsBtnSmall';
+        cancelBtn.style.padding = '4px 8px';
+        cancelBtn.style.fontSize = '11px';
+        cancelBtn.style.marginLeft = '6px';
+        cancelBtn.onclick = () => {
+          editingHostId = null;
+          renderHostsTable();
+        };
+        tdActions.appendChild(saveBtn);
+        tdActions.appendChild(cancelBtn);
+      } else {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.className = 'hostsBtnSmall';
+        editBtn.style.padding = '4px 8px';
+        editBtn.style.fontSize = '11px';
+        editBtn.onclick = () => {
+          editingHostId = host.id;
+          renderHostsTable();
+        };
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.className = 'hostsBtnSmall';
+        delBtn.style.padding = '4px 8px';
+        delBtn.style.fontSize = '11px';
+        delBtn.style.marginLeft = '6px';
+        delBtn.onclick = () => deleteHost(host.id);
+        tdActions.appendChild(editBtn);
+        tdActions.appendChild(delBtn);
+      }
+      tr.appendChild(tdActions);
+      
+      hostsTbody.appendChild(tr);
+    }
+  }
+
+  async function saveHostEdits(hostId) {
+    const nameEl = document.getElementById(`edit_name_${hostId}`);
+    const addrEl = document.getElementById(`edit_addr_${hostId}`);
+    const typeEl = document.getElementById(`edit_type_${hostId}`);
+    const tagsEl = document.getElementById(`edit_tags_${hostId}`);
+    const notesEl = document.getElementById(`edit_notes_${hostId}`);
+
+    const tags = tagsEl && String(tagsEl.value || '').trim() !== ''
+      ? String(tagsEl.value).split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    const payload = {
+      name: nameEl ? String(nameEl.value || '').trim() : null,
+      address: addrEl ? String(addrEl.value || '').trim() : null,
+      type: typeEl ? String(typeEl.value || '').trim() : null,
+      tags: tags,
+      notes: notesEl ? String(notesEl.value || '').trim() : null,
+    };
+
+    if (!payload.name || !payload.address) {
+      showError(hostsErr, 'Hostname and IP Address are required');
+      return;
     }
 
-    function setHoverOpen(open) {
-      // Never fight the mobile drawer.
-      if (document.body.classList.contains('sidebarOpen')) return;
-      document.body.classList.toggle('sidebarHover', !!open);
-    }
-
-    if (sideToggle) {
-      sideToggle.addEventListener('click', () => {
-        setOpen(!document.body.classList.contains('sidebarOpen'));
+    try {
+      const updated = await fetchJson(`/api/admin/hosts/${hostId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
       });
-    }
+      editingHostId = null;
+      showError(hostsErr, '');
 
-    // Clicking outside closes the drawer on mobile.
-    document.addEventListener('click', (e) => {
-      if (!document.body.classList.contains('sidebarOpen')) return;
-      // clicks inside sidebar or on toggle shouldn't close
-      const t = e.target;
-      if (t && (sidebar.contains(t) || (sideToggle && sideToggle.contains(t)))) return;
-      setOpen(false);
+      pushSystemLog('info', `Host updated: ${payload.name} (${payload.address})`);
+
+      // Update local cache to keep Hosts + Map in sync immediately.
+      try {
+        const idx = hostsData.findIndex(h => String(h?.id) === String(hostId));
+        if (idx >= 0) {
+          hostsData[idx] = { ...hostsData[idx], ...updated };
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      renderHostsTable();
+      renderMapView();
+
+      try {
+        window.dispatchEvent(new CustomEvent('ashd:hosts-updated', { detail: { hostId } }));
+      } catch (e) {
+        // ignore
+      }
+
+      // Also refresh from server to ensure authoritative state.
+      await loadHosts();
+    } catch (e) {
+      pushSystemLog('error', `Host update failed (id=${hostId}): ${e.message}`);
+      showError(hostsErr, `Failed to update host: ${e.message}`);
+    }
+  }
+
+  async function addHost(e) {
+    e.preventDefault();
+    
+    const hostName = $('hostName');
+    const hostAddress = $('hostAddress');
+    const hostType = $('hostType');
+    const hostTags = $('hostTags');
+    const hostNotes = $('hostNotes');
+    
+    if (!hostName || !hostAddress) return;
+    
+    const tags = hostTags && hostTags.value ? [hostTags.value] : [];
+    
+    const hostData = {
+      name: hostName.value.trim(),
+      address: hostAddress.value.trim(),
+      type: hostType && hostType.value ? hostType.value.trim() : null,
+      tags: tags,
+      notes: hostNotes && hostNotes.value ? hostNotes.value.trim() : null
+    };
+    
+    if (!hostData.name || !hostData.address) {
+      showError(hostsErr, 'Hostname and IP Address are required');
+      return;
+    }
+    
+    try {
+      await fetchJson('/api/admin/hosts', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(hostData)
+      });
+      
+      // Clear form
+      hostsForm.reset();
+      
+      // Reload hosts
+      await loadHosts();
+      
+      pushSystemLog('info', `Host added: ${hostData.name} (${hostData.address})`);
+      showError(hostsErr, ''); // Clear errors
+    } catch (e) {
+      pushSystemLog('error', `Host add failed: ${e.message}`);
+      showError(hostsErr, `Failed to add host: ${e.message}`);
+    }
+  }
+
+  async function deleteHost(hostId) {
+    if (!confirm('Are you sure you want to delete this host?')) return;
+    
+    try {
+      await fetchJson(`/api/admin/hosts/${hostId}`, {method: 'DELETE'});
+      await loadHosts();
+      pushSystemLog('warn', `Host deleted: id=${hostId}`);
+      showError(hostsErr, '');
+    } catch (e) {
+      pushSystemLog('error', `Host delete failed (id=${hostId}): ${e.message}`);
+      showError(hostsErr, `Failed to delete host: ${e.message}`);
+    }
+  }
+
+  async function autoDiscoverHosts() {
+    const network = prompt('Enter network to scan (e.g., 192.168.50.0/24 or 10.0.0.0/24):', '192.168.50.0/24');
+    if (!network) return;
+    
+    showError(hostsErr, 'Scanning network... This may take a minute.');
+    
+    try {
+      const result = await fetchJson('/api/admin/hosts/discover', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({network: network, timeout: 0.5})
+      });
+      
+      await loadHosts();
+
+      pushSystemLog('info', `Auto-discover: scanned ${network}, found ${result.discovered}, added ${result.added}`);
+      
+      showError(hostsErr, `Discovery complete: Found ${result.discovered} hosts, added ${result.added} new hosts`);
+      setTimeout(() => showError(hostsErr, ''), 5000);
+    } catch (e) {
+      pushSystemLog('error', `Auto-discover failed (${network}): ${e.message}`);
+      showError(hostsErr, `Discovery failed: ${e.message}`);
+    }
+  }
+
+  // === Maps Visualization ===
+  function renderMapView() {
+    if (!mapSvg || hostsData.length === 0) {
+      if (mapSvg) mapSvg.innerHTML = '<text x="500" y="320" text-anchor="middle" fill="#666" font-size="14">No hosts to display. Add hosts first.</text>';
+      return;
+    }
+    
+    mapSvg.innerHTML = '';
+    
+    // Create SVG defs for gradients and markers
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    
+    // Gradient for nodes
+    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+    gradient.setAttribute('id', 'nodeGradient');
+    gradient.innerHTML = `
+      <stop offset="0%" style="stop-color:#78e6ff;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#2080a0;stop-opacity:0.6" />
+    `;
+    defs.appendChild(gradient);
+    
+    // Arrow marker
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', 'arrowhead');
+    marker.setAttribute('markerWidth', '10');
+    marker.setAttribute('markerHeight', '10');
+    marker.setAttribute('refX', '8');
+    marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '0 0, 10 3, 0 6');
+    polygon.setAttribute('fill', 'rgba(120, 230, 255, 0.3)');
+    marker.appendChild(polygon);
+    defs.appendChild(marker);
+    
+    mapSvg.appendChild(defs);
+    
+    // Calculate layout
+    const centerX = 500;
+    const centerY = 320;
+    const radius = 250;
+    
+    // Create central hub node
+    const hub = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    hub.setAttribute('cx', centerX);
+    hub.setAttribute('cy', centerY);
+    hub.setAttribute('r', '30');
+    hub.setAttribute('fill', 'url(#nodeGradient)');
+    hub.setAttribute('stroke', '#78e6ff');
+    hub.setAttribute('stroke-width', '2');
+    mapSvg.appendChild(hub);
+    
+    const hubText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    hubText.setAttribute('x', centerX);
+    hubText.setAttribute('y', centerY + 5);
+    hubText.setAttribute('text-anchor', 'middle');
+    hubText.setAttribute('fill', '#e9f9ff');
+    hubText.setAttribute('font-size', '12');
+    hubText.setAttribute('font-weight', 'bold');
+    hubText.textContent = 'ASHD Server';
+    mapSvg.appendChild(hubText);
+    
+    // Position hosts in a circle around the hub
+    const hostPos = new Map();
+    hostsData.forEach((host, i) => {
+      const angle = (i / hostsData.length) * 2 * Math.PI - Math.PI / 2;
+      const x = centerX + radius * Math.cos(angle);
+      const y = centerY + radius * Math.sin(angle);
+
+      hostPos.set(String(host.id), { x, y });
+      
+      // Connection line
+      const tags = Array.isArray(host.tags) ? host.tags : [];
+      const isAuto = tags.includes('auto-discovered');
+      if (!isAuto) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', centerX);
+        line.setAttribute('y1', centerY);
+        line.setAttribute('x2', x);
+        line.setAttribute('y2', y);
+        line.setAttribute('stroke', 'rgba(120, 230, 255, 0.3)');
+        line.setAttribute('stroke-width', '1');
+        line.setAttribute('stroke-dasharray', '5,5');
+        line.setAttribute('marker-end', 'url(#arrowhead)');
+        mapSvg.appendChild(line);
+      }
+      
+      // Host node
+      const node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      node.setAttribute('cx', x);
+      node.setAttribute('cy', y);
+      node.setAttribute('r', '20');
+      node.setAttribute('fill', isAuto ? '#ffa500' : '#2080a0');
+      node.setAttribute('stroke', '#78e6ff');
+      node.setAttribute('stroke-width', String(mapSelectedHostId === host.id ? 3 : 2));
+      node.style.cursor = 'pointer';
+      node.addEventListener('click', (e) => {
+        if (e && (e.ctrlKey || e.metaKey)) {
+          window.location.href = `/host/${host.id}`;
+          return;
+        }
+
+        if (!isLinkingEnabled()) {
+          window.location.href = `/host/${host.id}`;
+          return;
+        }
+
+        if (mapSelectedHostId == null) {
+          mapSelectedHostId = host.id;
+          renderMapView();
+          return;
+        }
+
+        if (mapSelectedHostId === host.id) {
+          mapSelectedHostId = null;
+          renderMapView();
+          return;
+        }
+
+        const a = String(mapSelectedHostId);
+        const b = String(host.id);
+        const key = _linkKey(a, b);
+        const links = getMapLinks();
+
+        const exists = links.some(l => l && typeof l === 'object' && _linkKey(l.a, l.b) === key);
+        const nextLinks = exists
+          ? links.filter(l => !(l && typeof l === 'object' && _linkKey(l.a, l.b) === key))
+          : links.concat([{ a, b }]);
+        setMapLinks(nextLinks);
+        mapSelectedHostId = null;
+        renderMapView();
+      });
+      mapSvg.appendChild(node);
+      
+      // Host name
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', x);
+      text.setAttribute('y', y - 30);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('fill', '#e9f9ff');
+      text.setAttribute('font-size', '11');
+      text.textContent = host.name.length > 15 ? host.name.substring(0, 15) + '...' : host.name;
+      mapSvg.appendChild(text);
+      
+      // Host IP
+      const ipText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      ipText.setAttribute('x', x);
+      ipText.setAttribute('y', y + 35);
+      ipText.setAttribute('text-anchor', 'middle');
+      ipText.setAttribute('fill', 'rgba(233, 249, 255, 0.6)');
+      ipText.setAttribute('font-size', '10');
+      ipText.textContent = host.address;
+      mapSvg.appendChild(ipText);
     });
 
-    // ESC closes drawer
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') setOpen(false);
+    const links = getMapLinks();
+    for (const l of links) {
+      if (!l || typeof l !== 'object') continue;
+      const a = String(l.a ?? '');
+      const b = String(l.b ?? '');
+      if (!a || !b) continue;
+      const pa = hostPos.get(a);
+      const pb = hostPos.get(b);
+      if (!pa || !pb) continue;
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      ln.setAttribute('x1', pa.x);
+      ln.setAttribute('y1', pa.y);
+      ln.setAttribute('x2', pb.x);
+      ln.setAttribute('y2', pb.y);
+      ln.setAttribute('stroke', 'rgba(120, 230, 255, 0.42)');
+      ln.setAttribute('stroke-width', '1.5');
+      ln.setAttribute('marker-end', 'url(#arrowhead)');
+      ln.style.cursor = 'pointer';
+      ln.addEventListener('click', (e) => {
+        if (e) e.stopPropagation();
+        const key = _linkKey(a, b);
+        const cur = getMapLinks();
+        const next = cur.filter(x => !(x && typeof x === 'object' && _linkKey(x.a, x.b) === key));
+        setMapLinks(next);
+        mapSelectedHostId = null;
+        renderMapView();
+      });
+      mapSvg.insertBefore(ln, mapSvg.firstChild);
+    }
+  }
+
+  function autoDiscoverFromMap() {
+    autoDiscoverHosts();
+  }
+
+  // === Error Display ===
+  function showError(el, msg) {
+    if (!el) return;
+    if (msg) {
+      el.textContent = msg;
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
+  // === View Switching ===
+  function showView(viewName) {
+    // Get the main HUD (monitoring view)
+    const hud = document.querySelector('.hud');
+    
+    // Hide all views
+    if (hostsView) hostsView.style.display = 'none';
+    if (inventoryView) inventoryView.style.display = 'none';
+    if (racksView) racksView.style.display = 'none';
+    if (mapsView) mapsView.style.display = 'none';
+    
+    // Show requested view
+    if (viewName === 'hosts') {
+      if (hud) hud.style.display = 'none';
+      if (hostsView) {
+        hostsView.style.display = 'block';
+        loadHosts();
+      }
+    } else if (viewName === 'inventory') {
+      if (hud) hud.style.display = 'none';
+      if (inventoryView) {
+        inventoryView.style.display = 'block';
+        renderInventory();
+      }
+    } else if (viewName === 'racks') {
+      if (hud) hud.style.display = 'none';
+      if (racksView) {
+        racksView.style.display = 'block';
+        renderRacks();
+      }
+    } else if (viewName === 'maps') {
+      if (hud) hud.style.display = 'none';
+      if (mapsView) {
+        mapsView.style.display = 'block';
+        loadHosts(); // Also loads map view
+      }
+    } else {
+      // Default view - show monitoring HUD
+      if (hud) hud.style.display = 'block';
+    }
+    
+    // Update nav active state
+    updateNavActive(viewName);
+  }
+  
+  function updateNavActive(viewName) {
+    const sideNav = $('sideNav');
+    if (!sideNav) return;
+    
+    const navItems = sideNav.querySelectorAll('[data-action]');
+    navItems.forEach(item => {
+      if (item.getAttribute('data-action') === viewName) {
+        item.setAttribute('aria-current', 'page');
+      } else {
+        item.removeAttribute('aria-current');
+      }
     });
+  }
 
-    // Desktop hover edge behavior
-    if (document.body.classList.contains('sidebarAutoHide')) {
-      const EDGE_PX = 26;
-      const CLOSE_PAD_PX = 48;
-
-      let closeTimer = null;
-
-      function openNow() {
-        if (closeTimer) {
-          clearTimeout(closeTimer);
-          closeTimer = null;
-        }
-        setHoverOpen(true);
-      }
-
-      function closeSoon() {
-        if (closeTimer) return;
-        closeTimer = setTimeout(() => {
-          closeTimer = null;
-          setHoverOpen(false);
-        }, 240);
-      }
-
-      function handleMove(e) {
-        if (!e) return;
-        const x = e.clientX;
-
-        // Use geometry rather than event target, because when the sidebar is
-        // transformed off-screen some browsers report unexpected targets.
-        let rectRight = EDGE_PX;
-        try {
-          const r = sidebar.getBoundingClientRect();
-          rectRight = typeof r.right === 'number' ? r.right : EDGE_PX;
-        } catch (_) {
-          rectRight = EDGE_PX;
-        }
-
-        // Hysteresis: open a little earlier than we close.
-        const openZone = Math.max(EDGE_PX, rectRight + 6);
-        const closeZone = rectRight + CLOSE_PAD_PX;
-        const isOpen = document.body.classList.contains('sidebarHover');
-
-        if (!isOpen) {
-          if (x <= openZone) openNow();
-          else closeSoon();
-          return;
-        }
-
-        // When already open: keep it open while the cursor is within (or near)
-        // the sidebar's visible width.
-        if (x <= closeZone) openNow();
-        else closeSoon();
-      }
-
-      document.addEventListener('mousemove', handleMove, { passive: true });
-      sidebar.addEventListener('mouseenter', () => openNow());
-      sidebar.addEventListener('mouseleave', (e) => {
-        try {
-          const x = e && typeof e.clientX === 'number' ? e.clientX : EDGE_PX + 1;
-          if (x > EDGE_PX) closeSoon();
-        } catch (_) {
-          closeSoon();
-        }
-      });
-    }
-
-    // Search filter
-    if (sideSearch && sideNav) {
-      sideSearch.addEventListener('input', () => {
-        const q = (sideSearch.value || '').trim().toLowerCase();
-        const items = sideNav.querySelectorAll('.sideItem');
-        for (const it of items) {
-          const label = (it.getAttribute('data-label') || it.textContent || '').toLowerCase();
-          it.style.display = !q || label.includes(q) ? '' : 'none';
-        }
-        // Hide group titles if none of their items match
-        const groups = sideNav.querySelectorAll('.sideGroup');
-        for (const g of groups) {
-          const anyVisible = Array.from(g.querySelectorAll('.sideItem')).some((a) => a.style.display !== 'none');
-          g.style.display = anyVisible ? '' : 'none';
-        }
-      });
-    }
-
-    // Placeholder actions (until multi-page features exist)
-    if (sideNav) {
-      sideNav.addEventListener('click', (e) => {
-        const a = e.target && e.target.closest ? e.target.closest('a.sideItem') : null;
-        if (!a) return;
-        const action = a.getAttribute('data-action') || '';
-        if (!action) return;
-
-        // Dashboard is current page; allow no-op.
-        if (action === 'dashboard') {
-          e.preventDefault();
-          setOpen(false);
-          try {
-            location.hash = '';
-          } catch (_) {
-            // ignore
-          }
-          routeFromHash();
-          return;
-        }
-
-        if (action === 'hosts') {
-          e.preventDefault();
-          setOpen(false);
-          try {
-            location.hash = 'hosts';
-          } catch (_) {
-            // ignore
-          }
-          routeFromHash();
-          return;
-        }
-
-        if (action === 'maps') {
-          e.preventDefault();
-          setOpen(false);
-          try {
-            location.hash = 'maps';
-          } catch (_) {
-            // ignore
-          }
-          routeFromHash();
-          return;
-        }
-
-        if (action === 'overview') {
-          e.preventDefault();
-          setOpen(false);
-          try {
-            location.href = '/overview';
-          } catch (_) {
-            // ignore
-          }
-          return;
-        }
-
-        if (action === 'configuration') {
-          e.preventDefault();
-          setOpen(false);
-          try {
-            location.href = '/configuration';
-          } catch (_) {
-            // ignore
-          }
-          return;
-        }
-
-        // Block navigation for sections not implemented.
+  // === Navigation Handling ===
+  function handleNavigation() {
+    const sideNav = $('sideNav');
+    if (!sideNav) return;
+    
+    const navItems = sideNav.querySelectorAll('[data-action]');
+    navItems.forEach(item => {
+      item.addEventListener('click', (e) => {
         e.preventDefault();
-        setOpen(false);
-        try {
-          const label = a.getAttribute('data-label') || action;
-          logs.push(`${new Date().toTimeString().slice(0, 8)} INFO: ${label} is not implemented yet`);
-          if (logs.length > 14) logs.shift();
-          els.logLines.textContent = logs.join('\n');
-        } catch (_) {
-          // ignore
+        const action = item.getAttribute('data-action');
+        
+        if (action === 'hosts' || action === 'maps' || action === 'inventory' || action === 'racks') {
+          // Navigate to dedicated views
+          window.location.hash = action;
+        } else {
+          // For other actions (overview, latest, screens, etc.), show monitoring view
+          window.location.hash = '';
+          showView('overview');
         }
       });
-    }
-  }
-
-  function fmtPct(v) {
-    return v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1) + '%';
-  }
-
-  function fmtLoad(v) {
-    return v == null ? '—' : (Math.round(v * 100) / 100).toFixed(2);
-  }
-
-  function fmtBytes(b) {
-    if (b == null) return '—';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    let n = Number(b);
-    let i = 0;
-    while (n >= 1024 && i < units.length - 1) {
-      n /= 1024;
-      i++;
-    }
-    const d = i <= 1 ? 0 : 1;
-    return `${n.toFixed(d)} ${units[i]}`;
-  }
-
-  function fmtMbps(bytesPerSec) {
-    if (bytesPerSec == null) return '—';
-    const mbps = (bytesPerSec * 8) / 1_000_000;
-    return `${mbps.toFixed(1)} Mb/s`;
-  }
-
-  function fmtUptime(sec) {
-    if (sec == null) return '—';
-    sec = Math.max(0, Math.floor(sec));
-    const d = Math.floor(sec / 86400);
-    sec -= d * 86400;
-    const h = Math.floor(sec / 3600);
-    sec -= h * 3600;
-    const m = Math.floor(sec / 60);
-    if (d > 0) return `${d}d ${h}h`;
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  }
-
-  function primaryDisk(disks) {
-    if (!disks || disks.length === 0) return null;
-    const root = disks.find((d) => d.mount === '/');
-    if (root) return root;
-    return disks.reduce((a, b) => (b.percent > a.percent ? b : a), disks[0]);
-  }
-
-  function push(arr, v) {
-    arr.push(v);
-    if (arr.length > MAX) arr.shift();
-  }
-
-  function cssVar(name, fallback) {
-    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return v || fallback;
-  }
-
-  function setConn(state) {
-    els.conn.textContent = state;
-  }
-
-  // --- Canvas sizing (crisp on any resolution/DPI) ---
-  const sparkCanvases = [els.cpuSpark, els.memSpark, els.diskSpark, els.gpuHealthSpark];
-
-  function resizeCanvasToDisplaySize(canvas) {
-    const rect = canvas.getBoundingClientRect();
-    const cssW = Math.max(1, Math.round(rect.width));
-    const cssH = Math.max(1, Math.round(rect.height));
-    const dpr = Math.max(1, Math.round((window.devicePixelRatio || 1) * 100) / 100);
-
-    const newW = Math.max(1, Math.round(cssW * dpr));
-    const newH = Math.max(1, Math.round(cssH * dpr));
-
-    if (canvas.width !== newW || canvas.height !== newH) {
-      canvas.width = newW;
-      canvas.height = newH;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.setTransform(1, 0, 0, 1, 0, 0);
-      return true;
-    }
-    return false;
-  }
-
-  function drawSpark(canvas, values, color) {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    // background glow
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    ctx.fillRect(0, 0, w, h);
-
-    if (!values || values.length < 2) return;
-    const min = 0;
-    const max = 100;
-
-    // grid lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = 1;
-    for (let i = 1; i < 4; i++) {
-      const y = (h * i) / 4;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
-    }
-
-    ctx.beginPath();
-    for (let i = 0; i < values.length; i++) {
-      const x = (w * i) / (values.length - 1);
-      const v = values[i];
-      const y = h - ((v - min) / (max - min)) * h;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // endpoint dot (keep fully visible)
-    const lx = w - 1;
-    const lv = values[values.length - 1];
-    const ly = h - ((lv - min) / (max - min)) * h;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(lx, ly, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function redrawSparks(lastSample) {
-    if (!lastSample) return;
-
-    const pd = primaryDisk(lastSample.disk);
-    const gh = gpuHealthFromSample(lastSample);
-
-    // Ensure backing stores match display sizes before drawing.
-    for (const c of sparkCanvases) resizeCanvasToDisplaySize(c);
-
-    drawSpark(els.cpuSpark, series.cpu, cssVar('--cpu', '#6ee7ff'));
-    drawSpark(els.memSpark, series.mem, cssVar('--mem', '#55ffa6'));
-    drawSpark(els.diskSpark, series.disk, cssVar('--disk', '#ffd166'));
-    drawSpark(els.gpuHealthSpark, series.gpuHealth, gpuHealthColor(gh));
-  }
-
-  function setupSparkResizeObserver(getLastSample) {
-    if (typeof ResizeObserver === 'undefined') {
-      // Fallback: resize on window events.
-      window.addEventListener('resize', () => {
-        for (const c of sparkCanvases) resizeCanvasToDisplaySize(c);
-        redrawSparks(getLastSample());
-      });
-      return;
-    }
-
-    const ro = new ResizeObserver(() => {
-      let changed = false;
-      for (const c of sparkCanvases) changed = resizeCanvasToDisplaySize(c) || changed;
-      if (changed) redrawSparks(getLastSample());
-    });
-
-    // Observe the canvas itself (size follows its container).
-    for (const c of sparkCanvases) ro.observe(c);
-  }
-
-  // --- Diagnostic + vitals ---
-
-  function setDiag(insights, sample) {
-    const anoms = insights && insights.anomalies ? insights.anomalies : [];
-    const worst = anoms.reduce(
-      (acc, a) => {
-        const rank = a.severity === 'crit' ? 3 : a.severity === 'warn' ? 2 : 1;
-        return rank > acc.rank ? { rank, sev: a.severity, a } : acc;
-      },
-      { rank: 0, sev: '', a: null },
-    );
-
-    let status = 'STABLE';
-    let statusColor = 'var(--ok)';
-    let pillCls = 'pill ok';
-    if (worst.rank === 3) {
-      status = 'CRITICAL';
-      statusColor = 'var(--crit)';
-      pillCls = 'pill crit';
-    } else if (worst.rank === 2) {
-      status = 'WARNING';
-      statusColor = 'var(--warn)';
-      pillCls = 'pill warn';
-    }
-
-    els.diagStatus.textContent = status;
-    els.diagStatus.style.color = statusColor;
-    els.pill.className = pillCls;
-    els.pill.textContent = status;
-
-    if (!sample) {
-      els.diagText.textContent = 'Collecting baseline…';
-      els.diagRec.textContent = 'RECOMMENDATION: —';
-      els.dangerBtn.style.display = 'none';
-      return;
-    }
-
-    const pd = primaryDisk(sample.disk);
-    const suspects = [];
-    if (sample.top_processes && sample.top_processes.length > 0) {
-      const p = sample.top_processes[0];
-      if (p && p.name) suspects.push(String(p.name));
-    }
-
-    const temp = sample.cpu_temp_c != null ? `${Math.round(sample.cpu_temp_c)}°C` : null;
-    const cpuLine = `CPU ${fmtPct(sample.cpu_percent)}${temp ? ' · ' + temp : ''}`;
-    const memLine = `RAM ${fmtPct(sample.mem_percent)} · ${fmtBytes(sample.mem_available_bytes)} free`;
-    const diskLine = pd ? `DISK ${fmtPct(pd.percent)} used · ${fmtBytes(pd.free_bytes)} free` : 'DISK —';
-
-    if (worst.a) {
-      els.diagText.textContent = `${worst.a.message}. ${cpuLine}. ${memLine}. ${diskLine}.`;
-      els.diagRec.textContent = suspects.length
-        ? `RECOMMENDATION: investigate ${suspects[0]}; reduce load and re-check.`
-        : 'RECOMMENDATION: reduce load and re-check.';
-      els.dangerBtn.style.display = worst.rank >= 2 ? 'inline-flex' : 'none';
-      els.dangerBtn.textContent = suspects.length ? `TAKE ACTION: ${suspects[0].toUpperCase()}` : 'TAKE ACTION';
-    } else {
-      els.diagText.textContent = `${insights && insights.summary ? insights.summary : 'All vitals within expected ranges.'} ${cpuLine}. ${memLine}. ${diskLine}.`;
-      els.diagRec.textContent = 'RECOMMENDATION: No immediate action required.';
-      els.dangerBtn.style.display = 'none';
-    }
-
-    // Add log lines
-    const now = new Date(sample.ts * 1000);
-    const stamp = now.toTimeString().slice(0, 8);
-    const lines = [];
-    if (worst.a) lines.push(`${stamp} ALERT: ${worst.a.message}`);
-    if (temp && Number(temp.replace('°C', '')) >= 80) lines.push(`${stamp} WARN: CPU temperature elevated (${temp})`);
-    if (sample.disk_health === 'crit') lines.push(`${stamp} CRIT: Disk usage critical`);
-    if (sample.disk_health === 'warn') lines.push(`${stamp} WARN: Disk usage high`);
-    if (sample.gpu_health === 'crit') lines.push(`${stamp} CRIT: GPU health critical`);
-    if (sample.gpu_health === 'warn') lines.push(`${stamp} WARN: GPU health degraded`);
-
-    for (const ln of lines) {
-      logs.push(ln);
-      if (logs.length > 14) logs.shift();
-    }
-    els.logLines.textContent = logs.length ? logs.join('\n') : `${stamp} INFO: system stable`;
-  }
-
-  function pad2(n) {
-    return String(n).padStart(2, '0');
-  }
-
-  function stampFromUnixTs(ts) {
-    try {
-      const n = Number(ts);
-      if (!Number.isFinite(n) || n <= 0) return new Date().toTimeString().slice(0, 8);
-      const d = new Date(n * 1000);
-      return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-    } catch (_) {
-      return new Date().toTimeString().slice(0, 8);
-    }
-  }
-
-  function appendSystemLogLine(line) {
-    try {
-      logs.push(String(line));
-      if (logs.length > 14) logs.shift();
-      els.logLines.textContent = logs.join('\n');
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  function handleBackendLogEvent(msg) {
-    if (!msg) return;
-    const stamp = stampFromUnixTs(msg.ts);
-    const level = String(msg.level || 'INFO').toUpperCase();
-    const message = String(msg.message || '').trim();
-    if (!message) return;
-    appendSystemLogLine(`${stamp} ${level}: ${message}`);
-  }
-
-  function gpuHealthFromSample(sample) {
-    if (!sample) return 'unknown';
-    if (sample.gpu_health) return sample.gpu_health;
-    if (!sample.gpu || sample.gpu.length === 0) return 'unknown';
-
-    let worst = 'ok';
-    const rank = (s) => (s === 'crit' ? 3 : s === 'warn' ? 2 : s === 'ok' ? 1 : 0);
-
-    for (const g of sample.gpu) {
-      let st = 'ok';
-      if (g && g.temp_c != null) {
-        const t = Number(g.temp_c);
-        if (t >= 90) st = 'crit';
-        else if (t >= 83) st = 'warn';
-      }
-      if (g && g.mem_used_mb != null && g.mem_total_mb) {
-        const pct = (Number(g.mem_used_mb) / Number(g.mem_total_mb)) * 100;
-        if (pct >= 99) st = 'crit';
-        else if (pct >= 95 && st !== 'crit') st = 'warn';
-      }
-      if (g && g.util_percent != null && st === 'ok') {
-        const u = Number(g.util_percent);
-        if (u >= 99) st = 'warn';
-      }
-      if (rank(st) > rank(worst)) worst = st;
-    }
-
-    return worst;
-  }
-
-  function gpuHealthScore(status) {
-    if (status === 'crit') return 100;
-    if (status === 'warn') return 65;
-    if (status === 'ok') return 20;
-    return 0;
-  }
-
-  function gpuHealthColor(status) {
-    if (status === 'crit') return 'var(--crit)';
-    if (status === 'warn') return 'var(--warn)';
-    if (status === 'ok') return 'var(--ok)';
-    return cssVar('--gpu', '#a78bfa');
-  }
-
-  function proto(sample, name) {
-    if (!sample || !sample.protocols) return null;
-    return sample.protocols[name] || null;
-  }
-
-  function setProto(el, p) {
-    const st = ((p && p.status) || 'unknown').toLowerCase();
-    el.classList.remove('ok', 'warn', 'crit', 'unknown');
-    el.classList.add(st);
-
-    let txt = st.toUpperCase();
-    if (p && p.latency_ms != null) txt += ` ${Math.round(Number(p.latency_ms))}ms`;
-    if (p && p.message) txt += ` · ${String(p.message)}`;
-    el.textContent = txt;
-  }
-
-  function setVitals(sample, netRate) {
-    if (!sample) return;
-    const temp = sample.cpu_temp_c != null ? `${Math.round(sample.cpu_temp_c)}°C` : '—';
-    const freq = sample.cpu_freq_mhz != null ? `${Math.round(sample.cpu_freq_mhz)}MHz` : '—';
-    const pd = primaryDisk(sample.disk);
-
-    els.cpuV.textContent = `${temp} / ${fmtPct(sample.cpu_percent)} / ${fmtLoad(sample.load1)} / ${freq}`;
-    els.ramV.textContent = `${fmtPct(sample.mem_percent)} used / ${fmtBytes(sample.mem_available_bytes)} free`;
-    els.diskV.textContent = pd ? `${fmtPct(pd.percent)} used / ${fmtBytes(pd.free_bytes)} free` : '—';
-    els.netV.textContent = netRate ? `TX ${fmtMbps(netRate.tx)} / RX ${fmtMbps(netRate.rx)}` : '—';
-    els.uptimeV.textContent = fmtUptime(sample.uptime_seconds);
-
-    setProto(els.ntpV, proto(sample, 'ntp'));
-    setProto(els.icmpV, proto(sample, 'icmp'));
-    setProto(els.snmpV, proto(sample, 'snmp'));
-    setProto(els.netflowV, proto(sample, 'netflow'));
-
-    if (sample.gpu && sample.gpu.length > 0) {
-      const g = sample.gpu[0];
-      const gtemp = g.temp_c != null ? `${Math.round(g.temp_c)}°C` : '—';
-      const util = g.util_percent != null ? `${Math.round(g.util_percent)}%` : '—';
-      els.gpuV.textContent = `${gtemp} / ${util}`;
-    } else {
-      els.gpuV.textContent = '—';
-    }
-  }
-
-  function setLeft(sample) {
-    if (!sample) return;
-    els.cpuLbl.textContent = fmtPct(sample.cpu_percent);
-    els.memLbl.textContent = fmtPct(sample.mem_percent);
-
-    const pd = primaryDisk(sample.disk);
-    els.diskLbl.textContent = pd ? fmtPct(pd.percent) : '—';
-
-    const gh = gpuHealthFromSample(sample);
-    els.gpuHealthLbl.textContent = (gh || 'unknown').toUpperCase();
-
-    push(series.cpu, sample.cpu_percent);
-    push(series.mem, sample.mem_percent);
-    push(series.disk, pd ? pd.percent : 0);
-    push(series.gpuHealth, gpuHealthScore(gh));
-
-    // canvas drawing happens in redrawSparks() to ensure correct backing store
-  }
-
-  function updateClock() {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString(undefined, {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-
-    els.date.textContent = dateStr;
-    els.time.textContent = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    els.subtime.textContent = now.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
     });
   }
 
-  // Demo command bar
-  function setupDemoActions() {
-    els.cmd.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      const v = els.cmd.value.trim();
-      if (!v) return;
-      logs.push(`${new Date().toTimeString().slice(0, 8)} CMD: ${v}`);
-      if (logs.length > 14) logs.shift();
-      els.logLines.textContent = logs.join('\n');
-      els.cmd.value = '';
-    });
-
-    els.actionBtn.addEventListener('click', () => {
-      logs.push(`${new Date().toTimeString().slice(0, 8)} INFO: acknowledged`);
-      if (logs.length > 14) logs.shift();
-      els.logLines.textContent = logs.join('\n');
-    });
-
-    els.dangerBtn.addEventListener('click', () => {
-      logs.push(`${new Date().toTimeString().slice(0, 8)} ACTION: queued (demo)`);
-      if (logs.length > 14) logs.shift();
-      els.logLines.textContent = logs.join('\n');
-    });
-  }
-
-  let lastNet = null;
-  let lastNetTs = null;
-  function netRate(sample) {
-    if (!sample || !sample.net) return null;
-    if (lastNet == null) {
-      lastNet = sample.net;
-      lastNetTs = sample.ts;
-      return null;
+  // === Add Auto-Discovery Buttons ===
+  function initAutoDiscovery() {
+    if (mapAutoDiscoverBtn) {
+      mapAutoDiscoverBtn.onclick = autoDiscoverHosts;
     }
-    const dt = Math.max(0.2, sample.ts - lastNetTs);
-    const tx = (sample.net.bytes_sent - lastNet.bytes_sent) / dt;
-    const rx = (sample.net.bytes_recv - lastNet.bytes_recv) / dt;
-    lastNet = sample.net;
-    lastNetTs = sample.ts;
-    return { tx: Math.max(0, tx), rx: Math.max(0, rx) };
-  }
 
-  let lastSample = null;
-  let lastInsights = null;
+    const hostsRefreshBtn = document.getElementById('hostsRefreshBtn');
+    if (hostsRefreshBtn) {
+      hostsRefreshBtn.onclick = loadHosts;
+    }
 
-  function render(sample, insights) {
-    if (sample && sample.hostname) els.host.textContent = sample.hostname;
-    const nr = netRate(sample);
-
-    lastSample = sample;
-    lastInsights = insights;
-
-    setLeft(sample);
-    redrawSparks(sample);
-    setVitals(sample, nr);
-    setDiag(insights, sample);
-  }
-
-  // --- Data transport: WS then poll fallback ---
-  let polling = false;
-  async function pollFallback() {
-    if (polling) return;
-    polling = true;
-    setConn('polling');
-
-    while (polling) {
-      try {
-        const [latest, insights] = await Promise.all([fetchJson('/api/metrics/latest'), fetchJson('/api/insights')]);
-        if (latest && latest.ts) render(latest, insights);
-      } catch (_) {
-        // ignore
-      }
-      await new Promise((r) => setTimeout(r, 1000));
+    if (mapLayoutSel) {
+      mapLayoutSel.onchange = () => {
+        mapSelectedHostId = null;
+        renderMapView();
+      };
     }
   }
 
-  let ws = null;
-  let wsPingTimer = null;
-  let wsFallbackTimer = null;
-
-  function clearWsTimers() {
-    if (wsPingTimer) {
-      clearInterval(wsPingTimer);
-      wsPingTimer = null;
-    }
-    if (wsFallbackTimer) {
-      clearTimeout(wsFallbackTimer);
-      wsFallbackTimer = null;
-    }
-  }
-
-  function connectWS() {
-    clearWsTimers();
-
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${proto}://${location.host}/ws/metrics`);
-    setConn('connecting…');
-
-    ws.onopen = () => {
-      setConn('live');
-      // If we were polling previously, stop.
-      polling = false;
-    };
-
-    ws.onclose = () => {
-      setConn('disconnected');
-      clearWsTimers();
-      setTimeout(connectWS, 1500);
-    };
-
-    ws.onerror = () => {
-      try {
-        ws.close();
-      } catch (_) {
-        // ignore
-      }
-    };
-
-    ws.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data);
-        if (msg.type === 'log') {
-          handleBackendLogEvent(msg);
-        } else if (msg.type === 'snapshot' || msg.type === 'sample') {
-          render(msg.sample, msg.insights);
-        } else if (msg.type === 'host_status') {
-          hostStatuses = (msg && msg.statuses && typeof msg.statuses === 'object') ? msg.statuses : {};
-          hostChecks = (msg && msg.checks && typeof msg.checks === 'object') ? msg.checks : {};
-          renderHostButtons();
-          updateHostsProtocolsLive();
-        }
-      } catch (_) {
-        // ignore
-      }
-    };
-
-    wsPingTimer = setInterval(() => {
-      if (ws && ws.readyState === 1) ws.send('ping');
-    }, 4000);
-
-    // If WS can't open quickly (common when unauthenticated), fallback to polling.
-    wsFallbackTimer = setTimeout(() => {
-      if (!ws || ws.readyState !== 1) {
-        try {
-          ws && ws.close();
-        } catch (_) {
-          // ignore
-        }
-        pollFallback();
-      }
-    }, 3000);
-  }
-
+  // === Initialization ===
   function init() {
-    applyPrefs();
-    setupSidebar();
-    setupHosts();
-    setupMaps();
-    window.addEventListener('hashchange', routeFromHash);
-    routeFromHash();
-    updateClock();
-    setInterval(updateClock, 500);
-    setupDemoActions();
-    setupHostButtons();
+    // Setup form submit
+    if (hostsForm) {
+      hostsForm.addEventListener('submit', addHost);
+    }
 
-    // Ensure initial canvas sizes are correct.
-    for (const c of sparkCanvases) resizeCanvasToDisplaySize(c);
-    setupSparkResizeObserver(() => lastSample);
+    if (invForm) {
+      invForm.addEventListener('submit', addInventoryItem);
+    }
 
-    connectWS();
+    if (invRefreshBtn) {
+      invRefreshBtn.onclick = renderInventory;
+    }
+
+    if (invSearch) {
+      invSearch.addEventListener('input', renderInventory);
+    }
+
+    if (rackForm) {
+      rackForm.addEventListener('submit', addRack);
+    }
+    if (rackRefreshBtn) {
+      rackRefreshBtn.onclick = renderRacks;
+    }
+    if (shelfAddBtn) {
+      shelfAddBtn.onclick = addShelf;
+    }
+    if (shelfRemoveBtn) {
+      shelfRemoveBtn.onclick = removeShelf;
+    }
+    
+    // Setup navigation
+    handleNavigation();
+    
+    // Add auto-discovery buttons
+    initAutoDiscovery();
+    
+    // Check URL hash for initial view
+    const hash = window.location.hash.substring(1);
+    if (hash === 'hosts') {
+      showView('hosts');
+    } else if (hash === 'inventory') {
+      showView('inventory');
+    } else if (hash === 'racks') {
+      showView('racks');
+    } else if (hash === 'maps') {
+      showView('maps');
+    } else {
+      // Default to monitoring view if no hash
+      showView('overview');
+    }
+    
+    // Handle hash changes
+    window.addEventListener('hashchange', () => {
+      const newHash = window.location.hash.substring(1);
+      if (newHash === 'hosts') {
+        showView('hosts');
+      } else if (newHash === 'inventory') {
+        showView('inventory');
+      } else if (newHash === 'racks') {
+        showView('racks');
+      } else if (newHash === 'maps') {
+        showView('maps');
+      } else {
+        // Empty hash or other - show monitoring view
+        showView('overview');
+      }
+    });
   }
 
+  // Start when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

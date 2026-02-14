@@ -237,6 +237,53 @@ class SQLiteMetricsStorage:
             return bool(cur.rowcount or 0)
 
 
+    def update_host(
+        self,
+        host_id: int,
+        *,
+        name: str | None = None,
+        address: str | None = None,
+        htype: str | None = None,
+        tags: list[str] | None = None,
+        notes: str | None = None,
+    ) -> bool:
+        if not self.enabled:
+            return False
+        conn = self._require_conn()
+
+        fields: list[str] = []
+        params: list[object] = []
+
+        if name is not None:
+            fields.append("name = ?")
+            params.append(str(name).strip())
+        if address is not None:
+            fields.append("address = ?")
+            params.append(str(address).strip())
+        if htype is not None:
+            v = str(htype).strip()
+            fields.append("type = ?")
+            params.append(v if v != "" else None)
+        if tags is not None:
+            cleaned = [str(t).strip() for t in (tags or []) if str(t).strip()]
+            fields.append("tags_json = ?")
+            params.append(json.dumps(cleaned, separators=(",", ":")))
+        if notes is not None:
+            v = str(notes).strip()
+            fields.append("notes = ?")
+            params.append(v if v != "" else None)
+
+        if not fields:
+            return False
+
+        params.append(int(host_id))
+        sql = "UPDATE hosts SET " + ", ".join(fields) + " WHERE id = ?"
+        with self._lock:
+            cur = conn.execute(sql, tuple(params))
+            conn.commit()
+            return bool(cur.rowcount or 0)
+
+
 storage = SQLiteMetricsStorage(settings.metrics_db_path)
 
 
@@ -296,3 +343,25 @@ async def deactivate_host(host_id: int) -> bool:
     if not storage.enabled:
         return False
     return await asyncio.to_thread(storage.deactivate_host, int(host_id))
+
+
+async def update_host(
+    host_id: int,
+    *,
+    name: str | None = None,
+    address: str | None = None,
+    htype: str | None = None,
+    tags: list[str] | None = None,
+    notes: str | None = None,
+) -> bool:
+    if not storage.enabled:
+        return False
+    return await asyncio.to_thread(
+        storage.update_host,
+        int(host_id),
+        name=name,
+        address=address,
+        htype=htype,
+        tags=tags,
+        notes=notes,
+    )

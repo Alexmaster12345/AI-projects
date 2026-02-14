@@ -84,6 +84,9 @@ class Settings:
     # NetFlow collector (local UDP port expected to be bound)
     netflow_port: int = _get_int("NETFLOW_PORT", 2055)
 
+    # WebSocket settings
+    ws_allow_anonymous: bool = bool(int(_get_str("WS_ALLOW_ANONYMOUS", "1") or "1"))
+
 
 settings = Settings()
 

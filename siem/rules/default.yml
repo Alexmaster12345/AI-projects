@@ -1,0 +1,216 @@
+rules:
+  - id: auth_failed_password
+    title: Failed password (Linux sshd)
+    severity: high
+    mitre:
+      tactics:
+        - Credential Access
+      techniques:
+        - Brute Force
+    when:
+      any:
+        - contains:
+            field: message
+            value: "Failed password"
+        - regex:
+            field: message
+            pattern: "Failed password for( invalid user)?"
+
+  - id: sudo_auth_failure
+    title: sudo authentication failure
+    severity: medium
+    mitre:
+      tactics:
+        - Privilege Escalation
+      techniques:
+        - Abuse Elevation Control Mechanism
+    when:
+      contains:
+        field: message
+        value: "sudo: authentication failure"
+
+  - id: suspicious_powershell
+    title: Suspicious PowerShell keywords
+    severity: high
+    mitre:
+      tactics:
+        - Execution
+      techniques:
+        - Command and Scripting Interpreter
+    when:
+      any:
+        - regex:
+            field: message
+            pattern: "(?i)powershell.*(downloadstring|iwr|invoke-webrequest|frombase64string)"
+        - regex:
+            field: message
+            pattern: '(?i)(-enc\s+|encodedcommand)'
+
+  - id: edr_suspicious_shell_download_exec
+    title: EDR suspicious download-and-exec command line
+    severity: high
+    mitre:
+      tactics:
+        - Execution
+      techniques:
+        - Command and Scripting Interpreter
+    when:
+      all:
+        - equals:
+            field: source
+            value: "edr"
+        - equals:
+            field: message
+            value: "edr_process_start"
+        - regex:
+            field: cmdline
+            pattern: "(?i)(curl|wget).*[|;].*(sh|bash)"
+
+  - id: edr_suspicious_tmp_exec
+    title: EDR process executing from /tmp
+    severity: medium
+    mitre:
+      tactics:
+        - Defense Evasion
+      techniques:
+        - Masquerading
+    when:
+      all:
+        - equals:
+            field: source
+            value: "edr"
+        - equals:
+            field: message
+            value: "edr_process_start"
+        - regex:
+            field: exe
+            pattern: "^/tmp/"
+
+  - id: web_sqli_in_request
+    title: Possible SQL injection in web request
+    severity: high
+    mitre:
+      tactics:
+        - Initial Access
+      techniques:
+        - Exploit Public-Facing Application
+    when:
+      any:
+        - regex:
+            field: http_path
+            pattern: "(?i)(union|select|sleep\\(|benchmark\\(|or\\s+1=1)"
+        - regex:
+            field: message
+            pattern: "(?i)(union|select|sleep\\(|benchmark\\(|or\\s+1=1)"
+
+  - id: web_xss_in_request
+    title: Possible XSS in web request
+    severity: medium
+    mitre:
+      tactics:
+        - Initial Access
+      techniques:
+        - Exploit Public-Facing Application
+    when:
+      any:
+        - regex:
+            field: http_path
+            pattern: "(?i)(<script|%3cscript|onerror=|onload=|javascript:)"
+        - regex:
+            field: message
+            pattern: "(?i)(<script|%3cscript|onerror=|onload=|javascript:)"
+
+  - id: web_webshell_upload_folder
+    title: Possible web shell access (PHP in upload folder)
+    severity: high
+    mitre:
+      tactics:
+        - Persistence
+      techniques:
+        - Server Software Component
+    when:
+      any:
+        - regex:
+            field: http_path
+            pattern: "(?i)/(upload|uploads|files|media)/.*\\.php(\\?|$)"
+        - regex:
+            field: message
+            pattern: "(?i)/(upload|uploads|files|media)/.*\\.php(\\?|$)"
+
+  - id: windows_log_cleared
+    title: Windows security log cleared
+    severity: high
+    mitre:
+      tactics:
+        - Defense Evasion
+      techniques:
+        - Indicator Removal
+    when:
+      any:
+        - equals:
+            field: event_action
+            value: "log_cleared"
+        - contains:
+            field: message
+            value: "1102"
+
+  - id: windows_account_created
+    title: Windows account created
+    severity: medium
+    mitre:
+      tactics:
+        - Persistence
+      techniques:
+        - Create Account
+    when:
+      equals:
+        field: event_action
+        value: "account_created"
+
+  - id: windows_account_deleted
+    title: Windows account deleted
+    severity: medium
+    mitre:
+      tactics:
+        - Defense Evasion
+      techniques:
+        - Account Access Removal
+    when:
+      equals:
+        field: event_action
+        value: "account_deleted"
+
+  - id: windows_admin_group_membership
+    title: User added to admin group
+    severity: high
+    mitre:
+      tactics:
+        - Privilege Escalation
+      techniques:
+        - Account Manipulation
+    when:
+      all:
+        - equals:
+            field: event_action
+            value: "group_membership_added"
+        - any:
+            - contains:
+                field: group
+                value: "Administrators"
+            - contains:
+                field: message
+                value: "Administrators"
+
+  - id: linux_passwd_file_touched
+    title: Possible modification of /etc/passwd
+    severity: high
+    mitre:
+      tactics:
+        - Persistence
+      techniques:
+        - Account Manipulation
+    when:
+      any:
+        - regex:
+            field: message
+            pattern: "(?i)/etc/passwd"

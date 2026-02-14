@@ -1,0 +1,211 @@
+nohup: ignoring input
+INFO:     Will watch for changes in these directories: ['/home/alex/siem']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [3274] using WatchFiles
+INFO:     Started server process [3277]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:59848 - "GET /web/info?hours=24 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50372 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50374 - "GET /soc/net/interfaces HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50372 - "GET /web/bootstrap?limit=50&hours=24 HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'siem/storage.py', 'siem/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [3277]
+INFO:     Started server process [3374]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'siem/normalize.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [3374]
+INFO:     Started server process [3380]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'siem/storage.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [3380]
+INFO:     Started server process [3385]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 693, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 569, in __aenter__
+    await self._router.startup()
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 672, in startup
+    handler()
+    ~~~~~~~^^
+  File "/home/alex/siem/siem/app.py", line 252, in _startup
+    init_db(DB_PATH)
+    ~~~~~~~^^^^^^^^^
+  File "/home/alex/siem/siem/storage.py", line 66, in init_db
+    conn.executescript(
+    ~~~~~~~~~~~~~~~~~~^
+        """
+        ^^^
+    ...<136 lines>...
+        """
+        ^^^
+    )
+    ^
+sqlite3.OperationalError: no such column: src_ip
+
+ERROR:    Application startup failed. Exiting.
+WARNING:  WatchFiles detected changes in 'siem/storage.py'. Reloading...
+INFO:     Started server process [3390]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 693, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 569, in __aenter__
+    await self._router.startup()
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 672, in startup
+    handler()
+    ~~~~~~~^^
+  File "/home/alex/siem/siem/app.py", line 252, in _startup
+    init_db(DB_PATH)
+    ~~~~~~~^^^^^^^^^
+  File "/home/alex/siem/siem/storage.py", line 66, in init_db
+    conn.executescript(
+    ~~~~~~~~~~~~~~~~~~^
+        """
+        ^^^
+    ...<136 lines>...
+        """
+        ^^^
+    )
+    ^
+sqlite3.OperationalError: no such column: src_ip
+
+ERROR:    Application startup failed. Exiting.
+WARNING:  WatchFiles detected changes in 'siem/app.py'. Reloading...
+INFO:     Started server process [3394]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 693, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 569, in __aenter__
+    await self._router.startup()
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 672, in startup
+    handler()
+    ~~~~~~~^^
+  File "/home/alex/siem/siem/app.py", line 434, in _startup
+    init_db(DB_PATH)
+    ~~~~~~~^^^^^^^^^
+  File "/home/alex/siem/siem/storage.py", line 66, in init_db
+    conn.executescript(
+    ~~~~~~~~~~~~~~~~~~^
+        """
+        ^^^
+    ...<136 lines>...
+        """
+        ^^^
+    )
+    ^
+sqlite3.OperationalError: no such column: src_ip
+
+ERROR:    Application startup failed. Exiting.
+WARNING:  WatchFiles detected changes in 'scripts/collector_tail.py'. Reloading...
+INFO:     Started server process [3397]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 693, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 569, in __aenter__
+    await self._router.startup()
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 672, in startup
+    handler()
+    ~~~~~~~^^
+  File "/home/alex/siem/siem/app.py", line 434, in _startup
+    init_db(DB_PATH)
+    ~~~~~~~^^^^^^^^^
+  File "/home/alex/siem/siem/storage.py", line 66, in init_db
+    conn.executescript(
+    ~~~~~~~~~~~~~~~~~~^
+        """
+        ^^^
+    ...<136 lines>...
+        """
+        ^^^
+    )
+    ^
+sqlite3.OperationalError: no such column: src_ip
+
+ERROR:    Application startup failed. Exiting.
+WARNING:  WatchFiles detected changes in 'scripts/syslog_udp_shipper.py'. Reloading...
+INFO:     Started server process [3399]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 693, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 569, in __aenter__
+    await self._router.startup()
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 672, in startup
+    handler()
+    ~~~~~~~^^
+  File "/home/alex/siem/siem/app.py", line 434, in _startup
+    init_db(DB_PATH)
+    ~~~~~~~^^^^^^^^^
+  File "/home/alex/siem/siem/storage.py", line 66, in init_db
+    conn.executescript(
+    ~~~~~~~~~~~~~~~~~~^
+        """
+        ^^^
+    ...<136 lines>...
+        """
+        ^^^
+    )
+    ^
+sqlite3.OperationalError: no such column: src_ip
+
+ERROR:    Application startup failed. Exiting.
+WARNING:  WatchFiles detected changes in 'scripts/syslog_udp_shipper.py'. Reloading...
+INFO:     Started server process [3401]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 693, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 569, in __aenter__
+    await self._router.startup()
+  File "/home/alex/.venv/lib64/python3.13/site-packages/starlette/routing.py", line 672, in startup
+    handler()
+    ~~~~~~~^^
+  File "/home/alex/siem/siem/app.py", line 434, in _startup
+    init_db(DB_PATH)
+    ~~~~~~~^^^^^^^^^
+  File "/home/alex/siem/siem/storage.py", line 66, in init_db
+    conn.executescript(
+    ~~~~~~~~~~~~~~~~~~^
+        """
+        ^^^
+    ...<136 lines>...
+        """
+        ^^^
+    )
+    ^
+sqlite3.OperationalError: no such column: src_ip
+
+ERROR:    Application startup failed. Exiting.
+WARNING:  WatchFiles detected changes in 'siem/storage.py'. Reloading...
+INFO:     Started server process [3875]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:39074 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54574 - "GET /soc/net/interfaces HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39074 - "GET /web/bootstrap?limit=50&hours=24 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [3875]
+INFO:     Stopping reloader process [3274]

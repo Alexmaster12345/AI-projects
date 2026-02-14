@@ -57,8 +57,72 @@
   white-space: pre-wrap;
 }
 
+.hostCharts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.chartContainer {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.chartTitle {
+  font-size: 0.9em;
+  color: rgba(233, 249, 255, 0.7);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.chartValue {
+  color: #55ffa6;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.chartContainer canvas {
+  width: 100%;
+  height: 100px;
+  display: block;
+}
+
+.problemsList {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.problemItem {
+  padding: 12px;
+  border-left: 3px solid;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 0 4px 4px 0;
+}
+
+.problemItem.error {
+  border-left-color: #ff4d6d;
+}
+
+.problemItem.warning {
+  border-left-color: #ffa500;
+}
+
+.problemTime {
+  font-size: 0.85em;
+  color: rgba(233, 249, 255, 0.5);
+  margin-bottom: 4px;
+}
+
+.problemText {
+  font-size: 0.9em;
+  color: rgba(233, 249, 255, 0.9);
+}
+
 .hostActions {
-  margin-top: 12px;
   display: flex;
   gap: 10px;
   justify-content: flex-end;
@@ -68,6 +132,39 @@
   margin-top: -2px;
   margin-bottom: 10px;
   font-size: 12px;
+}
+
+.hostProtoTableWrap {
+  width: 100%;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.12);
+}
+
+.hostProtoTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.hostProtoTable th,
+.hostProtoTable td {
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  text-align: left;
+}
+
+.hostProtoTable th {
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.62);
+  background: rgba(0,0,0,0.10);
+}
+
+.hostProtoTable tr:last-child td {
+  border-bottom: none;
 }
 
 .hostProtoGrid {
