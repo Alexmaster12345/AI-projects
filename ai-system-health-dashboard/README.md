@@ -15,6 +15,9 @@ Local, real-time system monitoring dashboard.
 - Inventory: `/inventory` (multi-page)
 - Overview: `/overview` (multi-page)
 - Configuration: `/configuration` (multi-page)
+- Hosts Management: `/hosts` (multi-page) - Discovered hosts and agent deployment
+- User Management: `/users` (multi-page) - User and group management
+- User Groups: `/user-groups` (multi-page) - Group-based access control
 
 ## Quickstart
 
@@ -152,12 +155,28 @@ If the DB file doesn't exist yet, start the server once (it will create the tabl
 
 ## API
 
+### Metrics & Monitoring
 - `GET /api/metrics/latest` — latest sample
 	- Unauthenticated: `401`
 	- `viewer` / `admin`: `200`
 - `GET /api/metrics/history?seconds=300`
 - `GET /api/insights`
 - WebSocket: `ws://localhost:8000/ws/metrics`
+
+### User Management (Admin Only)
+- `GET /api/users` — List all users
+- `POST /api/users` — Create new user
+- `PUT /api/users/{user_id}` — Update user
+- `DELETE /api/users/{user_id}` — Delete user
+- `GET /api/user-groups` — List all user groups
+- `POST /api/user-groups` — Create user group
+- `PUT /api/user-groups/{group_id}` — Update user group
+- `DELETE /api/user-groups/{group_id}` — Delete user group
+
+### Host Discovery & Deployment
+- `GET /api/discovery/results` — Get discovery results
+- `GET /api/agent/files/{os_type}` — Get agent files for OS type
+- `POST /api/agent/deploy/{host_ip}` — Deploy agent to host
 
 Admin (SQLite):
 
@@ -167,3 +186,124 @@ Admin (SQLite):
 	- `admin`: `200`
 - `POST /api/admin/db/prune` — delete rows older than `SQLITE_RETENTION_SECONDS`
 - `POST /api/admin/db/vacuum` — rebuild DB file (may pause briefly)
+
+## Network Monitoring & Agent Deployment
+
+### Auto-Discovery & Multi-Platform Agents
+
+The dashboard now includes comprehensive network monitoring and agent deployment capabilities:
+
+- **Auto-Discovery**: Scans network ranges to discover hosts
+- **Multi-Platform Support**: Ubuntu, Debian, RHEL, CentOS, Rocky Linux
+- **Non-Root Deployment**: Secure agent deployment with minimal privileges
+- **SNMP Monitoring**: Full SNMP v2c support with automatic configuration
+- **NTP Synchronization**: Time service management and monitoring
+
+### Quick Start with Agent Deployment
+
+#### 1. Auto-Discover Hosts
+```bash
+python scripts/auto_discover_hosts.py
+```
+
+#### 2. Deploy Non-Root Agent (Recommended)
+```bash
+# Deploy to centos-docker (192.168.50.198)
+./deploy_non_root_centos_docker.sh
+```
+
+#### 3. Access Hosts Management
+- **Hosts Dashboard**: http://localhost:8001/hosts
+- **View discovered hosts and deployment status**
+- **Generate deployment commands automatically**
+
+### Agent Features
+
+- **System Metrics**: CPU, memory, disk, network monitoring
+- **SNMP Integration**: Full v2c support with automatic configuration
+- **NTP Sync**: Time service configuration and monitoring
+- **Service Management**: Systemd integration with auto-restart
+- **Security**: Non-root deployment with minimal sudo privileges
+- **Firewall Config**: Automatic port opening (SNMP:161, NTP:123)
+
+### Supported Operating Systems
+
+| OS | Package Manager | SNMP Service | NTP Service |
+|----|----------------|--------------|-------------|
+| Ubuntu | apt | snmpd | ntp |
+| Debian | apt | snmpd | ntp |
+| RHEL | dnf | snmpd | chronyd |
+| CentOS | yum | snmpd | chronyd |
+| Rocky Linux | dnf | snmpd | chronyd |
+
+### Configuration
+
+Environment variables for network monitoring:
+
+- `SNMP_HOST` - SNMP target host (default: empty)
+- `SNMP_PORT` - SNMP port (default: 161)
+- `SNMP_COMMUNITY` - SNMP community string (default: public)
+- `SNMP_TIMEOUT_SECONDS` - SNMP timeout (default: 5)
+- `ICMP_HOST` - ICMP target host (default: 1.1.1.1)
+- `ICMP_TIMEOUT_SECONDS` - ICMP timeout (default: 3)
+- `NTP_SERVER` - NTP server (default: pool.ntp.org)
+- `PROTOCOL_CHECK_INTERVAL_SECONDS` - Check interval (default: 30)
+
+Example configuration:
+```bash
+SNMP_HOST=192.168.50.198
+SNMP_COMMUNITY=public
+ICMP_HOST=192.168.50.198
+NTP_SERVER=pool.ntp.org
+PROTOCOL_CHECK_INTERVAL_SECONDS=30
+```
+
+### Troubleshooting
+
+#### SNMP Issues
+```bash
+# Test SNMP connectivity
+snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0
+
+# Check SNMP service
+systemctl status snmpd
+```
+
+#### NTP Issues
+```bash
+# Check NTP status
+chronyc sources
+# or
+ntpq -p
+
+# Force NTP sync
+chronyc -a makestep
+```
+
+#### Agent Issues
+```bash
+# Check agent service
+systemctl status ashd-agent
+
+# Check agent logs
+journalctl -u ashd-agent -f
+
+# Test agent manually
+sudo -u ashd-agent python3 /home/ashd-agent/ashd-agent/ashd_agent.py
+```
+
+### Documentation
+
+- **Agent Deployment Guide**: `AGENT_DEPLOYMENT_GUIDE.md`
+- **Non-Root Deployment**: `NON_ROOT_DEPLOYMENT_GUIDE.md`
+- **Network Monitoring**: `docs/NETWORK_MONITORING_GUIDE.md`
+- **SNMP Configuration**: `docs/SNMP_CONFIGURATION.md`
+- **Auto-Discovery Summary**: `auto_discovery_summary.md`
+
+### Scripts Available
+
+- `scripts/auto_discover_hosts.py` - Network discovery
+- `scripts/deploy_agents_non_root.py` - Non-root deployment
+- `scripts/quick_deploy_agent.py` - Quick deployment
+- `scripts/setup_snmp.py` - SNMP configuration
+- `scripts/test_snmp_devices.py` - SNMP testing

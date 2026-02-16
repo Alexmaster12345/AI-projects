@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-02-16 22:52:19",
+  "network_ranges": [
+    "192.168.50.0/24"
+  ],
+  "total_hosts_found": 4,
+  "hosts_by_os": {},
+  "deployable_hosts": [],
+  "all_hosts": [
+    {
+      "ip": "192.168.50.81",
+      "hostname": null,
+      "os_type": "unknown",
+      "os_version": null,
+      "package_manager": null,
+      "snmp_available": false,
+      "ssh_accessible": false,
+      "agent_deployable": false
+    },
+    {
+      "ip": "192.168.50.89",
+      "hostname": null,
+      "os_type": "unknown",
+      "os_version": null,
+      "package_manager": null,
+      "snmp_available": false,
+      "ssh_accessible": false,
+      "agent_deployable": false
+    },
+    {
+      "ip": "192.168.50.1",
+      "hostname": null,
+      "os_type": "unknown",
+      "os_version": null,
+      "package_manager": null,
+      "snmp_available": false,
+      "ssh_accessible": false,
+      "agent_deployable": false
+    },
+    {
+      "ip": "192.168.50.198",
+      "hostname": null,
+      "os_type": "unknown",
+      "os_version": null,
+      "package_manager": null,
+      "snmp_available": false,
+      "ssh_accessible": false,
+      "agent_deployable": false
+    }
+  ]
+}

@@ -21,23 +21,11 @@ except Exception:  # pragma: no cover
 
 
 try:
-    from pysnmp.hlapi import (  # type: ignore
-        CommunityData,
-        ContextData,
-        ObjectIdentity,
-        ObjectType,
-        SnmpEngine,
-        UdpTransportTarget,
-        getCmd,
-    )
+    import subprocess  # type: ignore
+    # Use snmpwalk command for SNMP checks
+    snmp_available = True
 except Exception:  # pragma: no cover
-    CommunityData = None  # type: ignore
-    ContextData = None  # type: ignore
-    ObjectIdentity = None  # type: ignore
-    ObjectType = None  # type: ignore
-    SnmpEngine = None  # type: ignore
-    UdpTransportTarget = None  # type: ignore
-    getCmd = None  # type: ignore
+    snmp_available = False
 
 
 _lock = threading.Lock()
@@ -144,35 +132,33 @@ def _check_snmp() -> ProtocolStatus:
         return ProtocolStatus(status="unknown", checked_ts=ts, message="not configured")
     if not community:
         return ProtocolStatus(status="unknown", checked_ts=ts, message="SNMP_COMMUNITY not set")
-    if getCmd is None:
-        return ProtocolStatus(status="unknown", checked_ts=ts, message="pysnmp not installed")
+    if not snmp_available:
+        return ProtocolStatus(status="unknown", checked_ts=ts, message="snmpwalk not available")
 
     timeout = float(settings.snmp_timeout_seconds)
     try:
         t0 = time.perf_counter()
-        # sysUpTime.0
-        iterator = getCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=1),  # v2c
-            UdpTransportTarget((host, port), timeout=timeout, retries=0),
-            ContextData(),
-            ObjectType(ObjectIdentity("1.3.6.1.2.1.1.3.0")),
-        )
-        error_indication, error_status, error_index, _var_binds = next(iterator)
+        
+        # Use snmpwalk command for SNMP check
+        cmd = ['snmpwalk', '-v2c', '-c', community, '-t', str(int(timeout)), '-r', '1', 
+               f'{host}:{port}', '1.3.6.1.2.1.1.3.0']  # sysUpTime.0
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout+2)
+        
         t1 = time.perf_counter()
         latency_ms = (t1 - t0) * 1000.0
 
-        if error_indication:
-            return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message=str(error_indication))
-        if error_status:
-            return ProtocolStatus(
-                status="crit",
-                checked_ts=ts,
-                latency_ms=latency_ms,
-                message=f"{error_status.prettyPrint()} at {error_index}",
-            )
-
-        return ProtocolStatus(status="ok", checked_ts=ts, latency_ms=latency_ms, message=f"{host}:{port}")
+        if result.returncode == 0:
+            return ProtocolStatus(status="ok", checked_ts=ts, latency_ms=latency_ms, message=f"{host}:{port}")
+        else:
+            error_msg = result.stderr.strip() or result.stdout.strip()
+            if "Timeout" in error_msg:
+                return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message="SNMP timeout")
+            else:
+                return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message=f"SNMP failed: {error_msg}")
+                
+    except subprocess.TimeoutExpired:
+        return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=timeout*1000, message="SNMP timeout")
     except Exception as e:
         return ProtocolStatus(status="crit", checked_ts=ts, message=f"SNMP failed: {e}")
 

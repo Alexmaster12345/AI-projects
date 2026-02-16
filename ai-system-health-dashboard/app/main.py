@@ -71,6 +71,9 @@ def _is_public_path(path: str) -> bool:
     # Allow favicon even when unauthenticated to avoid noisy logs.
     if path == "/favicon.ico":
         return True
+    # Allow hosts management page
+    if path == "/hosts":
+        return True
     # User management pages (they handle their own auth)
     if path in ("/users", "/user-groups"):
         return True
@@ -720,39 +723,33 @@ def _check_snmp_host(address: str) -> ProtocolStatus:
         return ProtocolStatus(status="unknown", checked_ts=ts, message="no address")
     if not community:
         return ProtocolStatus(status="unknown", checked_ts=ts, message="SNMP_COMMUNITY not set")
-    # If pysnmp isn't installed, auth_storage imports set getCmd=None.
-    try:
-        from .protocols import getCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity  # type: ignore
-    except Exception:
-        getCmd = None  # type: ignore
-
-    if getCmd is None:
-        return ProtocolStatus(status="unknown", checked_ts=ts, message="pysnmp not installed")
+    # Use snmpwalk for SNMP checks
+    import subprocess  # type: ignore
 
     timeout = float(getattr(settings, "snmp_timeout_seconds", 1.2) or 1.2)
     try:
         t0 = time.perf_counter()
-        iterator = getCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=1),
-            UdpTransportTarget((host, port), timeout=timeout, retries=0),
-            ContextData(),
-            ObjectType(ObjectIdentity("1.3.6.1.2.1.1.3.0")),
-        )
-        error_indication, error_status, error_index, _var_binds = next(iterator)
+        
+        # Use snmpwalk command for SNMP check
+        cmd = ['snmpwalk', '-v2c', '-c', community, '-t', str(int(timeout)), '-r', '1', 
+               f'{host}:{port}', '1.3.6.1.2.1.1.1.0']  # sysDescr.0
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout+2)
+        
         t1 = time.perf_counter()
         latency_ms = (t1 - t0) * 1000.0
 
-        if error_indication:
-            return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message=str(error_indication))
-        if error_status:
-            return ProtocolStatus(
-                status="crit",
-                checked_ts=ts,
-                latency_ms=latency_ms,
-                message=f"{error_status.prettyPrint()} at {error_index}",
-            )
-        return ProtocolStatus(status="ok", checked_ts=ts, latency_ms=latency_ms, message=f"{host}:{port}")
+        if result.returncode == 0:
+            return ProtocolStatus(status="ok", checked_ts=ts, latency_ms=latency_ms, message=f"{host}:{port}")
+        else:
+            error_msg = result.stderr.strip() or result.stdout.strip()
+            if "Timeout" in error_msg:
+                return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message="SNMP timeout")
+            else:
+                return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message=f"SNMP failed: {error_msg}")
+                
+    except subprocess.TimeoutExpired:
+        return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=timeout*1000, message="SNMP timeout")
     except Exception as e:
         return ProtocolStatus(status="crit", checked_ts=ts, message=f"SNMP failed: {e}")
 
@@ -1285,20 +1282,17 @@ async def api_create_user_group(group_in: UserGroupCreate, request: Request) -> 
 
 # === Routes for User Management Pages ===
 
-@app.get("/users")
-async def users_page(request: Request) -> Any:
-    """Serve the users management page."""
-    user = await _get_current_user(request)
-    if user is None or user.role != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-    
+@app.get("/hosts", response_class=HTMLResponse)
+async def hosts_page(request: Request):
+    """Serve the hosts management page."""
+    return FileResponse("app/static/hosts.html")
+
+@app.get("/users", response_class=HTMLResponse)
+async def users_page(request: Request):
+    """Serve the user management page."""
     return FileResponse("app/static/users.html")
 
-@app.get("/user-groups")
-async def user_groups_page(request: Request) -> Any:
+@app.get("/user-groups", response_class=HTMLResponse)
+async def user_groups_page(request: Request):
     """Serve the user groups management page."""
-    user = await _get_current_user(request)
-    if user is None or user.role != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-    
     return FileResponse("app/static/user-groups.html")
