@@ -12,8 +12,9 @@ from html import escape
 from typing import Any, Optional
 
 from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -69,6 +70,9 @@ def _is_public_path(path: str) -> bool:
         return True
     # Allow favicon even when unauthenticated to avoid noisy logs.
     if path == "/favicon.ico":
+        return True
+    # User management pages (they handle their own auth)
+    if path in ("/users", "/user-groups"):
         return True
     return False
 
@@ -1120,3 +1124,181 @@ async def ws_metrics(ws: WebSocket) -> None:
         pass
     finally:
         await broadcaster.remove(ws)
+
+
+# === User Management API Endpoints ===
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+    role: str = "user"
+    is_active: bool = True
+    user_groups: Optional[list[int]] = []
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    user_groups: Optional[list[int]] = None
+
+class UserGroupCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    allowed_hosts: Optional[list[str]] = []
+
+@app.get("/api/admin/users")
+async def api_get_users(request: Request) -> Any:
+    """Get all users (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    users = await asyncio.to_thread(auth_storage.get_all_users)
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "role": u.role,
+            "is_active": u.is_active,
+            "created_at": u.created_at,
+            "last_login": u.last_login,
+            "user_groups": [g["id"] for g in await asyncio.to_thread(auth_storage.get_user_groups, u.id)]
+        }
+        for u in users
+    ]
+
+@app.post("/api/admin/users")
+async def api_create_user(user_in: UserCreate, request: Request) -> Any:
+    """Create a new user (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    try:
+        new_user = await asyncio.to_thread(
+            auth_storage.create_user,
+            username=user_in.username,
+            password=user_in.password,
+            email=user_in.email,
+            role=user_in.role,
+            is_active=user_in.is_active
+        )
+        
+        # Add user to groups if specified
+        for group_id in user_in.user_groups or []:
+            await asyncio.to_thread(auth_storage.add_user_to_group, new_user.id, group_id)
+        
+        return {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email,
+            "role": new_user.role,
+            "is_active": new_user.is_active,
+            "created_at": new_user.created_at,
+            "last_login": new_user.last_login
+        }
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to create user: {str(e)}"}, status_code=400)
+
+@app.put("/api/admin/users/{user_id}")
+async def api_update_user(user_id: int, user_in: UserUpdate, request: Request) -> Any:
+    """Update a user (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    try:
+        # Update user fields
+        update_data = {}
+        if user_in.username is not None:
+            update_data["username"] = user_in.username
+        if user_in.password is not None and user_in.password:
+            update_data["password"] = user_in.password
+        if user_in.email is not None:
+            update_data["email"] = user_in.email
+        if user_in.role is not None:
+            update_data["role"] = user_in.role
+        if user_in.is_active is not None:
+            update_data["is_active"] = user_in.is_active
+        
+        if update_data:
+            success = await asyncio.to_thread(auth_storage.update_user, user_id, **update_data)
+            if not success:
+                return JSONResponse({"detail": "User not found or no changes made"}, status_code=404)
+        
+        return {"detail": "User updated successfully"}
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to update user: {str(e)}"}, status_code=400)
+
+@app.delete("/api/admin/users/{user_id}")
+async def api_delete_user(user_id: int, request: Request) -> Any:
+    """Delete a user (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    # Prevent self-deletion
+    if user.id == user_id:
+        return JSONResponse({"detail": "Cannot delete yourself"}, status_code=400)
+    
+    try:
+        success = await asyncio.to_thread(auth_storage.delete_user, user_id)
+        if not success:
+            return JSONResponse({"detail": "User not found"}, status_code=404)
+        return {"detail": "User deleted successfully"}
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to delete user: {str(e)}"}, status_code=400)
+
+# === User Groups API Endpoints ===
+
+@app.get("/api/admin/user-groups")
+async def api_get_user_groups(request: Request) -> Any:
+    """Get all user groups (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    groups = await asyncio.to_thread(auth_storage.get_all_user_groups)
+    return groups
+
+@app.post("/api/admin/user-groups")
+async def api_create_user_group(group_in: UserGroupCreate, request: Request) -> Any:
+    """Create a new user group (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    try:
+        group_id = await asyncio.to_thread(
+            auth_storage.create_user_group,
+            name=group_in.name,
+            description=group_in.description,
+            allowed_hosts=group_in.allowed_hosts
+        )
+        return {"id": group_id, "name": group_in.name, "description": group_in.description, "allowed_hosts": group_in.allowed_hosts}
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to create user group: {str(e)}"}, status_code=400)
+
+# === Routes for User Management Pages ===
+
+@app.get("/users")
+async def users_page(request: Request) -> Any:
+    """Serve the users management page."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return RedirectResponse(url="/login", status_code=303)
+    
+    return FileResponse("app/static/users.html")
+
+@app.get("/user-groups")
+async def user_groups_page(request: Request) -> Any:
+    """Serve the user groups management page."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return RedirectResponse(url="/login", status_code=303)
+    
+    return FileResponse("app/static/user-groups.html")
