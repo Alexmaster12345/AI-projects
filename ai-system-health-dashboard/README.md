@@ -121,3 +121,64 @@ Admin (SQLite):
 	- `admin`: `200`
 - `POST /api/admin/db/prune` — delete rows older than `SQLITE_RETENTION_SECONDS`
 - `POST /api/admin/db/vacuum` — rebuild DB file (may pause briefly)
+
+User Management:
+- `GET /api/admin/users` — list all users
+- `POST /api/admin/users` — create new user
+- `PUT /api/admin/users/{id}` — update user
+- `DELETE /api/admin/users/{id}` — delete user
+- `GET /api/admin/user-groups` — list user groups
+- `POST /api/admin/user-groups` — create user group
+
+## Screenshots
+
+The project includes an automated screenshot system for documentation. Screenshots are generated locally and not stored in GitHub to reduce repository size.
+
+### Quick Setup
+
+```bash
+# Run the setup script (installs dependencies and captures screenshots)
+./scripts/setup_screenshots.sh
+```
+
+### Manual Setup
+
+1. Install dependencies:
+```bash
+pip install selenium pillow requests
+```
+
+2. Install Chrome/Chromium browser if not already installed
+
+3. Set environment variables (optional):
+```bash
+export ASHD_URL="http://localhost:8000"
+export ASHD_USER="admin"
+export ASHD_PASS="admin123"
+```
+
+4. Run the screenshot script:
+```bash
+python scripts/take_screenshots.py
+```
+
+### View Screenshots
+
+- Open `docs/index.html` in your browser to view the gallery
+- Screenshots are saved in `docs/screenshots/`
+- The script captures all major pages including the new user management features
+
+### Features Captured
+
+- Login page
+- Dashboard with metrics
+- Hosts management
+- Network maps
+- Inventory
+- Overview
+- Configuration
+- Host details
+- **NEW**: Users management
+- **NEW**: User groups
+- **NEW**: Add user modal
+- **NEW**: Add user group modal

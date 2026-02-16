@@ -248,7 +248,12 @@
   async function loadMe() {
     try {
       currentUser = await fetchJson('/api/me');
-      setText(els.user, currentUser && currentUser.username ? currentUser.username : '—');
+      const usernameEl = document.getElementById('ovUsername');
+if (usernameEl) {
+  setText(usernameEl, currentUser && currentUser.username ? currentUser.username : '—');
+} else {
+  setText(els.user, currentUser && currentUser.username ? currentUser.username : '—');
+}
     } catch (_) {
       currentUser = null;
       setText(els.user, '—');

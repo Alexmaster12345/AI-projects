@@ -132,7 +132,12 @@
     try {
       const [me, cfg] = await Promise.all([fetchJson('/api/me'), fetchJson('/api/config')]);
 
-      setText(els.user, me && me.username ? me.username : '—');
+      const usernameEl = document.getElementById('cfgUsername');
+if (usernameEl) {
+  setText(usernameEl, me && me.username ? me.username : '—');
+} else {
+  setText(els.user, me && me.username ? me.username : '—');
+}
 
       setText(els.appTitle, cfg && cfg.app ? cfg.app.title : '—');
       setText(els.appVersion, cfg && cfg.app ? cfg.app.version : '—');

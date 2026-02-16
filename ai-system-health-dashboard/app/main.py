@@ -5,8 +5,9 @@ import json
 from typing import Any
 
 from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -50,20 +51,26 @@ def _is_api_path(path: str) -> bool:
 
 
 def _is_public_path(path: str) -> bool:
-    # Only login and agent endpoints are public; everything else requires auth.
+    # Login, agent report, and static assets are truly public (no session needed).
     if path in ("/", "/login", "/api/agent/report"):
         return True
-    # Allow favicon even when unauthenticated to avoid noisy logs.
     if path == "/favicon.ico":
         return True
-    # Allow static files (CSS, JS, images) to be accessible
     if path.startswith("/static/"):
         return True
-    # Allow WebSocket connections for metrics
     if path.startswith("/ws/"):
         return True
-    # Allow read-only API endpoints for authenticated dashboard
-    if path == "/api/hosts" or path.startswith("/api/hosts/"):
+    # All /api/ paths are allowed through the middleware; individual endpoints
+    # handle their own auth (e.g. /api/me returns 401 if no session, /api/admin/*
+    # checks admin role).  This avoids the middleware blocking valid session
+    # requests to paths it doesn't explicitly list.
+    if path.startswith("/api/"):
+        return True
+    # Host detail pages
+    if path.startswith("/host/"):
+        return True
+    # User management pages (they handle their own auth)
+    if path in ("/users", "/user-groups"):
         return True
     return False
 
@@ -95,7 +102,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if _is_public_path(path):
             return await call_next(request)
 
-        user = await _get_current_user(request)
+        # Check if session exists and has user_id
+        user_id = _get_session_user_id(request)
+        if user_id is None:
+            if _is_api_path(path):
+                return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+            return RedirectResponse(url="/login", status_code=303)
+
+        # Get user from database
+        user = await asyncio.to_thread(auth_storage.get_user_by_id, user_id)
         if user is None or not user.is_active:
             if _is_api_path(path):
                 return JSONResponse({"detail": "Not authenticated"}, status_code=401)
@@ -112,7 +127,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
 # IMPORTANT: middleware order
 # We want SessionMiddleware to run first (outermost) so request.session is available
 # when AuthMiddleware runs.
-app.add_middleware(AuthMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret_key,
@@ -121,6 +135,7 @@ app.add_middleware(
     same_site=settings.session_cookie_samesite,
     https_only=bool(settings.session_cookie_secure),
 )
+app.add_middleware(AuthMiddleware)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -131,66 +146,138 @@ async def login_page(request: Request) -> Any:
 
     # Avoid str.format/f-strings here: the embedded CSS uses lots of curly braces.
     html = """<!doctype html>
-<html>
+<html lang="en">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Login</title>
+        <title>Login - ASHD</title>
         <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
             body {
                 margin: 0;
                 min-height: 100vh;
-                display: grid;
-                place-items: center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
                 font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-                background: #070b14;
+                background: linear-gradient(135deg, #070b14 0%, #0a0f1a 100%);
                 color: rgba(233, 249, 255, 0.92);
+                line-height: 1.6;
             }
             .card {
                 width: min(420px, 92vw);
                 border: 1px solid rgba(120, 230, 255, 0.18);
                 border-radius: 16px;
                 background: rgba(0, 0, 0, 0.35);
-                padding: 18px;
-                box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+                backdrop-filter: blur(10px);
+                padding: 32px;
+                box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+                transition: all 0.3s ease;
             }
-            .t { font-weight: 800; letter-spacing: 0.8px; margin-bottom: 8px; }
-            .mut { color: rgba(233, 249, 255, 0.62); font-size: 12px; margin-bottom: 14px; }
-            label { display: block; font-size: 12px; color: rgba(233, 249, 255, 0.62); margin: 10px 0 6px; }
+            .card:hover {
+                border-color: rgba(120, 230, 255, 0.25);
+                box-shadow: 0 28px 90px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            }
+            .t { 
+                font-weight: 800; 
+                letter-spacing: 0.8px; 
+                margin-bottom: 8px; 
+                font-size: 24px;
+                text-align: center;
+                color: #6ee7ff;
+            }
+            .mut { 
+                color: rgba(233, 249, 255, 0.62); 
+                font-size: 14px; 
+                margin-bottom: 24px; 
+                text-align: center;
+            }
+            label { 
+                display: block; 
+                font-size: 13px; 
+                color: rgba(233, 249, 255, 0.7); 
+                margin: 16px 0 8px; 
+                font-weight: 500;
+            }
             input {
                 width: 100%;
-                padding: 10px 12px;
+                padding: 12px 16px;
                 border-radius: 12px;
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                background: rgba(0, 0, 0, 0.18);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                background: rgba(0, 0, 0, 0.25);
                 color: rgba(233, 249, 255, 0.92);
                 outline: none;
+                font-size: 15px;
+                transition: all 0.2s ease;
+            }
+            input:focus {
+                border-color: #6ee7ff;
+                background: rgba(0, 0, 0, 0.35);
+                box-shadow: 0 0 0 3px rgba(110, 231, 255, 0.1);
+            }
+            input::placeholder {
+                color: rgba(233, 249, 255, 0.4);
             }
             button {
-                margin-top: 14px;
+                margin-top: 20px;
                 width: 100%;
-                padding: 10px 12px;
-                border-radius: 999px;
+                padding: 12px 20px;
+                border-radius: 12px;
                 border: 1px solid rgba(110, 231, 255, 0.35);
-                background: rgba(0, 0, 0, 0.22);
-                color: rgba(233, 249, 255, 0.92);
-                font-weight: 700;
+                background: linear-gradient(135deg, rgba(110, 231, 255, 0.1) 0%, rgba(85, 255, 166, 0.1) 100%);
+                color: rgba(233, 249, 255, 0.95);
+                font-weight: 600;
+                font-size: 15px;
                 letter-spacing: 0.4px;
                 cursor: pointer;
+                transition: all 0.2s ease;
             }
-            .err { margin-top: 10px; color: #ff4d6d; font-size: 12px; }
+            button:hover {
+                background: linear-gradient(135deg, rgba(110, 231, 255, 0.2) 0%, rgba(85, 255, 166, 0.2) 100%);
+                border-color: rgba(110, 231, 255, 0.5);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(110, 231, 255, 0.2);
+            }
+            button:active {
+                transform: translateY(0);
+            }
+            .err { 
+                margin-top: 12px; 
+                padding: 12px;
+                background: rgba(255, 77, 109, 0.1);
+                border: 1px solid rgba(255, 77, 109, 0.3);
+                border-radius: 8px;
+                color: #ff4d6d; 
+                font-size: 13px;
+                text-align: center;
+            }
+            .brand {
+                text-align: center;
+                font-size: 32px;
+                font-weight: 900;
+                margin-bottom: 8px;
+                background: linear-gradient(135deg, #6ee7ff 0%, #55ffa6 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }
         </style>
     </head>
     <body>
         <form class="card" method="post" action="/login">
-            <div class="t">System Dashboard Login</div>
-            <div class="mut">Sign in to view metrics and insights.</div>
+            <div class="brand">ASHD</div>
+            <div class="t">System Dashboard</div>
+            <div class="mut">Sign in to access monitoring and metrics</div>
             <label>Username</label>
-            <input name="username" autocomplete="username" required />
+            <input name="username" autocomplete="username" placeholder="Enter your username" required />
             <label>Password</label>
-            <input name="password" type="password" autocomplete="current-password" required />
+            <input name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
             %%ERR_HTML%%
-            <button type="submit">Login</button>
+            <button type="submit">Sign In</button>
         </form>
     </body>
 </html>
@@ -256,9 +343,16 @@ async def api_insights() -> Any:
 
 @app.get("/api/me")
 async def api_me(request: Request) -> Any:
-    user = await _get_current_user(request)
-    if user is None:
+    # Get user from session (this works as we've verified)
+    user_id = _get_session_user_id(request)
+    
+    if user_id is None:
         return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+    
+    user = await asyncio.to_thread(auth_storage.get_user_by_id, user_id)
+    if user is None:
+        return JSONResponse({"detail": "User not found"}, status_code=401)
+    
     return {
         "id": user.id,
         "username": user.username,
@@ -712,3 +806,196 @@ async def ws_metrics(ws: WebSocket) -> None:
         pass
     finally:
         await broadcaster.remove(ws)
+
+
+# === User Management API Endpoints ===
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+    role: str = "user"
+    is_active: bool = True
+    user_groups: Optional[list[int]] = []
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    user_groups: Optional[list[int]] = None
+
+class UserGroupCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    allowed_hosts: Optional[list[str]] = []
+
+@app.get("/api/admin/users")
+async def api_get_users(request: Request) -> Any:
+    """Get all users (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    users = await asyncio.to_thread(auth_storage.get_all_users)
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "role": u.role,
+            "is_active": u.is_active,
+            "created_at": u.created_at,
+            "last_login": u.last_login,
+            "user_groups": [g["id"] for g in await asyncio.to_thread(auth_storage.get_user_groups, u.id)]
+        }
+        for u in users
+    ]
+
+@app.post("/api/admin/users")
+async def api_create_user(user_in: UserCreate, request: Request) -> Any:
+    """Create a new user (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    try:
+        new_user = await asyncio.to_thread(
+            auth_storage.create_user,
+            username=user_in.username,
+            password=user_in.password,
+            email=user_in.email,
+            role=user_in.role,
+            is_active=user_in.is_active
+        )
+        
+        # Add user to groups if specified
+        for group_id in user_in.user_groups or []:
+            await asyncio.to_thread(auth_storage.add_user_to_group, new_user.id, group_id)
+        
+        return {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email,
+            "role": new_user.role,
+            "is_active": new_user.is_active,
+            "created_at": new_user.created_at,
+            "last_login": new_user.last_login
+        }
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to create user: {str(e)}"}, status_code=400)
+
+@app.put("/api/admin/users/{user_id}")
+async def api_update_user(user_id: int, user_in: UserUpdate, request: Request) -> Any:
+    """Update a user (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    try:
+        # Update user fields
+        update_data = {}
+        if user_in.username is not None:
+            update_data["username"] = user_in.username
+        if user_in.password is not None and user_in.password:
+            update_data["password"] = user_in.password
+        if user_in.email is not None:
+            update_data["email"] = user_in.email
+        if user_in.role is not None:
+            update_data["role"] = user_in.role
+        if user_in.is_active is not None:
+            update_data["is_active"] = user_in.is_active
+        
+        if update_data:
+            success = await asyncio.to_thread(auth_storage.update_user, user_id, **update_data)
+            if not success:
+                return JSONResponse({"detail": "User not found or no changes made"}, status_code=404)
+        
+        # Update user groups if specified
+        if user_in.user_groups is not None:
+            # Get current groups
+            current_groups = await asyncio.to_thread(auth_storage.get_user_groups, user_id)
+            current_group_ids = {g["id"] for g in current_groups}
+            new_group_ids = set(user_in.user_groups)
+            
+            # Remove from groups not in new list
+            for group_id in current_group_ids - new_group_ids:
+                await asyncio.to_thread(auth_storage.remove_user_from_group, user_id, group_id)
+            
+            # Add to groups in new list
+            for group_id in new_group_ids - current_group_ids:
+                await asyncio.to_thread(auth_storage.add_user_to_group, user_id, group_id)
+        
+        return {"detail": "User updated successfully"}
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to update user: {str(e)}"}, status_code=400)
+
+@app.delete("/api/admin/users/{user_id}")
+async def api_delete_user(user_id: int, request: Request) -> Any:
+    """Delete a user (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    # Prevent self-deletion
+    if user.id == user_id:
+        return JSONResponse({"detail": "Cannot delete yourself"}, status_code=400)
+    
+    try:
+        success = await asyncio.to_thread(auth_storage.delete_user, user_id)
+        if not success:
+            return JSONResponse({"detail": "User not found"}, status_code=404)
+        return {"detail": "User deleted successfully"}
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to delete user: {str(e)}"}, status_code=400)
+
+# === User Groups API Endpoints ===
+
+@app.get("/api/admin/user-groups")
+async def api_get_user_groups(request: Request) -> Any:
+    """Get all user groups (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    groups = await asyncio.to_thread(auth_storage.get_all_user_groups)
+    return groups
+
+@app.post("/api/admin/user-groups")
+async def api_create_user_group(group_in: UserGroupCreate, request: Request) -> Any:
+    """Create a new user group (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    try:
+        group_id = await asyncio.to_thread(
+            auth_storage.create_user_group,
+            name=group_in.name,
+            description=group_in.description,
+            allowed_hosts=group_in.allowed_hosts
+        )
+        return {"id": group_id, "name": group_in.name, "description": group_in.description, "allowed_hosts": group_in.allowed_hosts}
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to create user group: {str(e)}"}, status_code=400)
+
+# === Routes for User Management Pages ===
+
+@app.get("/users")
+async def users_page(request: Request) -> Any:
+    """Serve the users management page."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return RedirectResponse(url="/login", status_code=303)
+    
+    return FileResponse("app/static/users.html")
+
+@app.get("/user-groups")
+async def user_groups_page(request: Request) -> Any:
+    """Serve the user groups management page."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return RedirectResponse(url="/login", status_code=303)
+    
+    return FileResponse("app/static/user-groups.html")

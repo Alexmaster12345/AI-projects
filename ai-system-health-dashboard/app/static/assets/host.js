@@ -607,7 +607,12 @@
       if (!hostId) throw new Error('Invalid host id in URL');
 
       const [me] = await Promise.all([fetchJson('/api/me')]);
-      setText(els.user, me && me.username ? me.username : '—');
+      const usernameEl = document.getElementById('hostUsername');
+if (usernameEl) {
+  setText(usernameEl, me && me.username ? me.username : '—');
+} else {
+  setText(els.user, me && me.username ? me.username : '—');
+}
 
       try {
         await loadHost(hostId);

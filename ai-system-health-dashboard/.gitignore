@@ -13,3 +13,7 @@ __pycache__/
 data/*.db
 data/*.db-*
 data/*.backup
+
+# Screenshots (generated locally)
+docs/screenshots/*.png
+!docs/screenshots/.gitkeep

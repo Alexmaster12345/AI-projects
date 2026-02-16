@@ -1170,6 +1170,12 @@
         if (action === 'hosts' || action === 'maps' || action === 'inventory' || action === 'racks') {
           // Navigate to dedicated views
           window.location.hash = action;
+        } else if (action === 'users') {
+          // Navigate to users page
+          window.location.href = '/users';
+        } else if (action === 'user-groups') {
+          // Navigate to user groups page
+          window.location.href = '/user-groups';
         } else {
           // For other actions (overview, latest, screens, etc.), show monitoring view
           window.location.hash = '';
@@ -1198,8 +1204,51 @@
     }
   }
 
+  // === User Management ===
+  async function fetchCurrentUser() {
+    try {
+      const response = await fetch('/api/me');
+      if (response.ok) {
+        const user = await response.json();
+        displayCurrentUser(user);
+      } else if (response.status === 401) {
+        // User not authenticated, redirect to login
+        window.location.href = '/login';
+      }
+    } catch (error) {
+      console.error('Failed to fetch current user:', error);
+      // Hide user display on error
+      const currentUserEl = document.getElementById('currentUser');
+      if (currentUserEl) {
+        currentUserEl.style.display = 'none';
+      }
+    }
+  }
+
+  function displayCurrentUser(user) {
+    const currentUserEl = document.getElementById('currentUser');
+    const usernameEl = document.getElementById('username');
+    
+    if (currentUserEl && usernameEl && user) {
+      usernameEl.textContent = user.username || 'Unknown';
+      currentUserEl.style.display = 'inline';
+      
+      // Add user role indicator if admin
+      if (user.role === 'admin') {
+        usernameEl.title = 'Administrator';
+        usernameEl.style.fontWeight = 'bold';
+      } else {
+        usernameEl.title = 'User';
+        usernameEl.style.fontWeight = 'normal';
+      }
+    }
+  }
+
   // === Initialization ===
   function init() {
+    // Fetch and display current user
+    fetchCurrentUser();
+    
     // Setup form submit
     if (hostsForm) {
       hostsForm.addEventListener('submit', addHost);

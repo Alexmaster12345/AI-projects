@@ -6,3 +6,7 @@ python-multipart>=0.0.9
 itsdangerous>=2.2.0
 ntplib>=0.4.0
 pysnmp>=4.4.12
+# Screenshot dependencies (optional)
+selenium>=4.15.0
+pillow>=10.0.0
+requests>=2.31.0
