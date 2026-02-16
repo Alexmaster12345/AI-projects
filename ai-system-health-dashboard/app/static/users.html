@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ASHD · Users</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260207" />
+    <link rel="stylesheet" href="/static/assets/users.css?v=20260207" />
+    <script defer src="/static/assets/users.js?v=20260207"></script>
+  </head>
+  <body>
+    <div class="appShell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">ASHD</div>
+          </div>
+
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/" data-action="dashboard" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="/overview" data-action="overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="/#hosts" data-action="hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/#maps" data-action="maps" data-label="Maps">Maps</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <a class="sideItem" href="/users" data-action="users" data-label="Users" aria-current="page">Users</a>
+            <a class="sideItem" href="/user-groups" data-action="user-groups" data-label="User groups">User groups</a>
+          </div>
+        </nav>
+
+        <div class="sideBottom" aria-label="Secondary">
+          <a class="sideItem" href="/#settings" data-action="settings" data-label="User settings">User settings</a>
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit" data-action="logout">Sign out</button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="content" id="content">
+        <div class="usersWrap">
+          <header class="usersHeader">
+            <div>
+              <div class="usersTitle">Users</div>
+              <div class="usersSub muted">Manage user accounts and permissions</div>
+            </div>
+            <div class="usersBadge">
+              <span class="dot"></span>
+              <span id="usersConn">ready</span>
+              <span class="sep">·</span>
+              <span class="muted" id="usersUser"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span id="usersUsername">—</span></span>
+            </div>
+          </header>
+
+          <div id="usersErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+          <div class="usersActions">
+            <button id="addUserBtn" class="btn btnPrimary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add User
+            </button>
+            <button id="refreshUsersBtn" class="btn btnSecondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Refresh
+            </button>
+          </div>
+
+          <div class="usersGrid">
+            <section class="hostsCard">
+              <div class="hostsCardTitle">User Accounts</div>
+              <div class="usersTableWrap">
+                <table class="usersTable" id="usersTable">
+                  <thead>
+                    <tr>
+                      <th>Username</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                      <th>Last Login</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersTableBody">
+                    <tr>
+                      <td colspan="7" class="textCenter muted">Loading users...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- Add/Edit User Modal -->
+        <div id="userModal" class="modal" style="display: none;">
+          <div class="modalContent">
+            <div class="modalHeader">
+              <h3 id="userModalTitle">Add User</h3>
+              <button class="modalClose" id="userModalClose">&times;</button>
+            </div>
+            <form id="userForm" class="modalBody">
+              <input type="hidden" id="userId" name="id">
+              
+              <div class="formGroup">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+              </div>
+              
+              <div class="formGroup">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email">
+              </div>
+              
+              <div class="formGroup">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password">
+                <small class="muted">Leave blank to keep current password</small>
+              </div>
+              
+              <div class="formGroup">
+                <label for="role">Role</label>
+                <select id="role" name="role" required>
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              
+              <div class="formGroup">
+                <label>
+                  <input type="checkbox" id="isActive" name="isActive" checked>
+                  Active
+                </label>
+              </div>
+            </form>
+            <div class="modalFooter">
+              <button type="button" class="btn btnSecondary" id="userModalCancel">Cancel</button>
+              <button type="submit" form="userForm" class="btn btnPrimary">Save User</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
