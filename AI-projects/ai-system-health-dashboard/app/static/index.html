@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI System Diagnostic</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260211_2" />
+    <script defer src="/static/assets/dashboard.js?v=20260211_2"></script>
+  </head>
+  <body>
+    <div class="appShell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">System Trace</div>
+          </div>
+
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="#" data-action="dashboard" data-label="Dashboard" aria-current="page">Dashboard</a>
+            <a class="sideItem" href="#" data-action="problems" data-label="Problems">Problems</a>
+            <a class="sideItem" href="#" data-action="hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="#" data-action="overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="#" data-action="latest" data-label="Latest data">Latest data</a>
+            <a class="sideItem" href="#" data-action="screens" data-label="Screens">Screens</a>
+            <a class="sideItem" href="#" data-action="maps" data-label="Maps">Maps</a>
+            <a class="sideItem" href="#" data-action="discovery" data-label="Discovery">Discovery</a>
+            <a class="sideItem" href="#" data-action="services" data-label="Services">Services</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Inventory</div>
+            <a class="sideItem" href="/inventory" data-action="inventory" data-label="Inventory">Inventory</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Reports</div>
+            <a class="sideItem" href="#" data-action="reports" data-label="Reports">Reports</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Configuration</div>
+            <a class="sideItem" href="#" data-action="configuration" data-label="Configuration">Configuration</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <a class="sideItem" href="#" data-action="administration" data-label="Administration">Administration</a>
+          </div>
+        </nav>
+
+        <div class="sideBottom" aria-label="Secondary">
+          <a class="sideItem" href="#" data-action="support" data-label="Support">Support</a>
+          <a class="sideItem" href="#" data-action="share" data-label="Share">Share</a>
+          <a class="sideItem" href="#" data-action="help" data-label="Help">Help</a>
+          <a class="sideItem" href="#" data-action="settings" data-label="User settings">User settings</a>
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit" data-action="logout">Sign out</button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="content" id="content">
+        <div class="frame">
+          <div class="hud">
+            <header>
+              <div class="headLeft">
+                <button id="sideToggle" class="sideToggle" type="button" aria-label="Toggle menu" title="Menu">
+                  <span aria-hidden="true">≡</span>
+                </button>
+                <div>
+                  <div id="date" class="date">—</div>
+                  <div class="title">AI SYSTEM DIAGNOSTIC</div>
+                </div>
+              </div>
+              <div class="badge"><span class="dot"></span><span id="conn">connecting…</span> · <span id="host">—</span></div>
+            </header>
+
+            <div class="grid">
+              <div class="panel leftTop">
+                <div class="clock">
+                  <div id="time" class="time">--:--</div>
+                  <div id="subtime" class="subtime">—</div>
+                </div>
+
+                <div class="spark">
+                  <div class="label"><span>CPU</span><span id="cpuLbl">—</span></div>
+                  <canvas id="cpuSpark" width="360" height="48"></canvas>
+                </div>
+
+                <div class="spark">
+                  <div class="label"><span>RAM USAGE</span><span id="memLbl">—</span></div>
+                  <canvas id="memSpark" width="360" height="48"></canvas>
+                </div>
+
+                <div class="spark">
+                  <div class="label"><span>DISK USAGE</span><span id="diskLbl">—</span></div>
+                  <canvas id="diskSpark" width="360" height="48"></canvas>
+                </div>
+
+                <div class="spark">
+                  <div class="label"><span>GPU HEALTH</span><span id="gpuHealthLbl">—</span></div>
+                  <canvas id="gpuHealthSpark" width="360" height="48"></canvas>
+                </div>
+              </div>
+
+              <div class="diag">
+                <div class="diagHeader">
+                  <div class="diagTitle">AI SYSTEM DIAGNOSTIC</div>
+                  <div class="status">STATUS: <strong id="diagStatus">STABLE</strong></div>
+                </div>
+                <div class="diagBody">
+                  <p id="diagText" class="muted">Collecting baseline…</p>
+                  <p id="diagRec" class="muted">RECOMMENDATION: —</p>
+                  <div class="ctaRow">
+                    <button id="actionBtn" class="btn" type="button">ACKNOWLEDGE</button>
+                    <button id="dangerBtn" class="btn danger" type="button" style="display:none;">TAKE ACTION</button>
+                    <span id="actionHint" class="hint">(demo only — no processes are killed)</span>
+                  </div>
+                </div>
+
+                <div class="logs">
+                  <div class="logsHeader">
+                    <div class="t">SYSTEM LOGS</div>
+                    <div class="pill" id="pill">—</div>
+                  </div>
+                  <div id="logLines" class="logLines">—</div>
+                </div>
+              </div>
+
+              <div class="panel vitals">
+                <h3>CORE VITALS</h3>
+                <div class="kv">
+                  <div class="kvRow"><span class="k">CPU</span><span id="cpuV" class="v">—</span></div>
+                  <div class="kvRow"><span class="k">RAM</span><span id="ramV" class="v">—</span></div>
+                  <div class="kvRow"><span class="k">DISK</span><span id="diskV" class="v">—</span></div>
+                  <div class="kvRow"><span class="k">NETWORK</span><span id="netV" class="v">—</span></div>
+                  <div class="kvRow"><span class="k">NTP</span><span id="ntpV" class="v proto unknown">—</span></div>
+                  <div class="kvRow"><span class="k">ICMP</span><span id="icmpV" class="v proto unknown">—</span></div>
+                  <div class="kvRow"><span class="k">SNMP</span><span id="snmpV" class="v proto unknown">—</span></div>
+                  <div class="kvRow"><span class="k">NETFLOW</span><span id="netflowV" class="v proto unknown">—</span></div>
+                  <div class="kvRow"><span class="k">UPTIME</span><span id="uptimeV" class="v">—</span></div>
+                  <div class="kvRow"><span class="k">GPU</span><span id="gpuV" class="v">—</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="cmd">
+              <div class="cmdBar">
+                <div id="hostButtons" class="hostButtons" aria-label="Host status"></div>
+                <div class="prompt">user@system-monitor:~$</div>
+                <input id="cmd" placeholder="type a command (demo)…" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Problems page (single-page view, toggled by dashboard.js via location.hash) -->
+          <section class="problemsView" id="problemsView" aria-label="Problems">
+            <div class="hostsHeader">
+              <div>
+                <div class="hostsTitle">Problems</div>
+                <div class="hostsSub muted">Current issues and recent error events for monitored hosts.</div>
+              </div>
+              <div class="mapsToolbar" role="toolbar" aria-label="Problems toolbar">
+                <label class="mapsSelect">
+                  <span class="k">Severity</span>
+                  <select id="problemsSeverity">
+                    <option value="crit">Critical</option>
+                    <option value="crit_warn" selected>Critical + Warning</option>
+                    <option value="all">All</option>
+                  </select>
+                </label>
+                <label class="mapsSelect">
+                  <span class="k">Search</span>
+                  <input id="problemsSearch" class="sideSearch" style="max-width: 220px;" placeholder="host / check / message" autocomplete="off" />
+                </label>
+                <button id="problemsRefreshBtn" class="hostsBtnSmall" type="button">Refresh</button>
+              </div>
+            </div>
+
+            <div class="problemsGrid">
+              <div class="hostsCard">
+                <div class="hostsCardTitle">Current problems</div>
+                <div id="problemsEmpty" class="hostsEmpty muted" style="display:none;">No problems detected.</div>
+                <div class="hostsTableWrap">
+                  <table class="hostsTable" aria-label="Problems table">
+                    <thead>
+                      <tr>
+                        <th>Scope</th>
+                        <th>Target</th>
+                        <th>Check</th>
+                        <th>Status</th>
+                        <th>Message</th>
+                        <th>Checked</th>
+                      </tr>
+                    </thead>
+                    <tbody id="problemsTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="hostsCard">
+                <div class="hostsCardTitle">Recent host events</div>
+                <div class="muted" style="margin:-6px 0 10px; font-size:12px;">Shows the last 500 events (memory only; resets on server restart).</div>
+                <div id="eventsEmpty" class="hostsEmpty muted" style="display:none;">No recent events.</div>
+                <div id="eventsList" class="eventsList" aria-label="Recent events"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Hosts page (single-page view, toggled by dashboard.js via location.hash) -->
+          <section class="hostsView" id="hostsView" aria-label="Hosts">
+            <div class="hostsHeader">
+              <div>
+                <div class="hostsTitle">Hosts</div>
+                <div class="hostsSub muted">Add and manage monitored hosts inventory (admin-only changes).</div>
+              </div>
+            </div>
+
+            <div id="hostsErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+            <div class="hostsGrid">
+              <form id="hostsForm" class="hostsCard" autocomplete="off">
+                <div class="hostsCardTitle">Add host</div>
+                <div class="hostsFormGrid">
+                  <label class="hostsField">
+                    <span class="k">Hostname</span>
+                    <input id="hostName" required placeholder="web-01" />
+                  </label>
+                  <label class="hostsField">
+                    <span class="k">IP Address</span>
+                    <input id="hostAddress" required placeholder="IP 10.0.0.10 or host.example" />
+                  </label>
+                  <label class="hostsField">
+                    <span class="k">Type</span>
+                    <input id="hostType" list="hostTypeList" placeholder="Linux / Windows / Router…" />
+                    <datalist id="hostTypeList">
+                      <option value="Linux"></option>
+                      <option value="Windows"></option>
+                      <option value="Router"></option>
+                      <option value="Firewall"></option>
+                      <option value="Switch"></option>
+                      <option value="PDU"></option>
+                      <option value="Storage system"></option>
+                      <option value="Koolance systems"></option>
+                    </datalist>
+                  </label>
+                  <label class="hostsField">
+                    <span class="k">Tags</span>
+                    <select id="hostTags">
+                      <option value="" selected>—</option>
+                      <option value="Data center">Data center</option>
+                      <option value="Labs">Labs</option>
+                    </select>
+                  </label>
+                  <label class="hostsField hostsFieldWide">
+                    <span class="k">Notes</span>
+                    <textarea id="hostNotes" rows="3" placeholder="Optional notes…"></textarea>
+                  </label>
+                </div>
+                <div class="hostsActions">
+                  <button id="hostsAddBtn" class="btn" type="submit">Add host</button>
+                  <span class="muted">Only admins can add/delete hosts.</span>
+                </div>
+              </form>
+
+              <div class="hostsCard">
+                <div class="hostsCardTitle">Host list</div>
+                <div id="hostsEmpty" class="hostsEmpty muted" style="display:none;">No hosts yet.</div>
+                <div class="hostsTableWrap">
+                  <table class="hostsTable" aria-label="Hosts table">
+                    <thead>
+                      <tr>
+                        <th>Hostname</th>
+                        <th>Address</th>
+                        <th>Type</th>
+                        <th>Tags</th>
+                        <th>Protocols</th>
+                        <th>Notes</th>
+                        <th style="width:1%;">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="hostsTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Maps page (single-page view, toggled by dashboard.js via location.hash) -->
+          <section class="mapsView" id="mapsView" aria-label="Maps">
+            <div class="mapsHeader">
+              <div>
+                <div class="mapsTitle">Maps</div>
+                <div class="mapsSub muted">Topology view based on added hosts.</div>
+              </div>
+
+              <div class="mapsToolbar" role="toolbar" aria-label="Maps toolbar">
+                <label class="mapsSelect">
+                  <span class="k">Minimum severity</span>
+                  <select id="mapSeverity">
+                    <option value="not_classified" selected>Not classified (default)</option>
+                    <option value="info">Info</option>
+                    <option value="warn">Warning</option>
+                    <option value="crit">Critical</option>
+                  </select>
+                </label>
+
+                <button id="mapEditBtn" class="hostsBtnSmall" type="button">Edit map</button>
+              </div>
+            </div>
+
+            <div id="mapsErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+            <div id="mapStage" class="mapStage" aria-label="Map stage">
+              <svg id="mapSvg" class="mapSvg" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet"></svg>
+
+              <div id="mapMenu" class="mapMenu" style="display:none;" role="menu" aria-label="Map menu">
+                <button id="mapMenuGoHosts" class="mapMenuItem" type="button" role="menuitem">Go to Hosts</button>
+                <button id="mapMenuCopyAddr" class="mapMenuItem" type="button" role="menuitem">Copy address</button>
+              </div>
+            </div>
+            <div id="mapHint" class="mapHint muted">Tip: click a host to focus it. Enable “Edit map” to drag nodes and save layout.</div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Trace · Host Monitor</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260207_8" />
+    <link rel="stylesheet" href="/static/assets/host.css?v=20260207_8" />
+    <script defer src="/static/assets/host.js?v=20260207_9"></script>
+  </head>
+  <body>
+    <div class="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">System Trace</div>
+          </div>
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="/overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="/#hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/#maps" data-label="Maps">Maps</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Configuration</div>
+            <a class="sideItem" href="/configuration" data-label="Configuration">Configuration</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <form class="sideLogout" method="post" action="/logout">
+              <button class="sideItem sideBtn" type="submit">Sign out</button>
+            </form>
+          </div>
+        </nav>
+      </aside>
+
+      <div class="content">
+        <div class="hostWrap">
+          <header class="hostHeader">
+            <div>
+              <div class="hostTitle">Host monitor</div>
+              <div class="hostSub muted">Live reachability status (ICMP) and inventory details.</div>
+            </div>
+            <div class="hostBadge">
+              <span class="dot"></span>
+              <span id="hostConn">loading…</span>
+              <span class="sep">·</span>
+              <span class="muted" id="hostUser">—</span>
+            </div>
+          </header>
+
+          <div id="hostErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+          <div class="hostGrid">
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Identity</div>
+              <div class="cfgKv">
+                <div class="cfgKvRow"><span class="k">Name</span>: <span id="hName" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Address</span>: <span id="hAddr" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Type</span>: <span id="hType" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Tags</span>: <span id="hTags" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Active</span>: <span id="hActive" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Created</span>: <span id="hCreated" class="v">—</span></div>
+              </div>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Status</div>
+              <div class="cfgKv">
+                <div class="cfgKvRow"><span class="k">Reachability</span>: <span id="hStatus" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Latency</span>: <span id="hLatency" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Last check</span>: <span id="hChecked" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Message</span>: <span id="hMsg" class="v">—</span></div>
+              </div>
+              <div class="hostActions">
+                <a class="btn" href="/#hosts">Back to Hosts</a>
+              </div>
+            </section>
+
+            <section class="hostsCard hostWide">
+              <div class="hostsCardTitle">Monitoring protocols</div>
+              <div class="hostProtoHelp muted">What to watch for (best-effort checks; some require services enabled on the host).</div>
+              <div class="hostProtoGrid">
+                <div class="hostProtoRow">
+                  <div class="pName">ICMP</div>
+                  <div class="pWhat">Packet loss / reachability</div>
+                  <div class="pMetric" id="pIcmp">—</div>
+                </div>
+                <div class="hostProtoRow">
+                  <div class="pName">SSH</div>
+                  <div class="pWhat">Connection failures (tcp/22)</div>
+                  <div class="pMetric" id="pSsh">—</div>
+                </div>
+                <div class="hostProtoRow">
+                  <div class="pName">SNMP</div>
+                  <div class="pWhat">High resource usage (agent reachability)</div>
+                  <div class="pMetric" id="pSnmp">—</div>
+                </div>
+                <div class="hostProtoRow">
+                  <div class="pName">NTP</div>
+                  <div class="pWhat">Clock skew / NTP server reachability (udp/123)</div>
+                  <div class="pMetric" id="pNtp">—</div>
+                </div>
+                <div class="hostProtoRow">
+                  <div class="pName">DNS</div>
+                  <div class="pWhat">Resolution errors</div>
+                  <div class="pMetric" id="pDns">—</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="hostsCard hostWide">
+              <div class="hostsCardTitle">Notes</div>
+              <div id="hNotes" class="hostNotes muted">—</div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
