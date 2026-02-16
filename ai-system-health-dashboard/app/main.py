@@ -171,7 +171,7 @@ async def login_page(request: Request) -> Any:
     </head>
     <body class="login">
         <div class="loginWrap">
-            <div class="loginLogo" aria-hidden="true">ASHD</div>
+            <div class="loginLogo" aria-hidden="true">System Trace</div>
 
             <form class="loginCard" method="post" action="/login" novalidate>
                 <div class="loginCardHeader">

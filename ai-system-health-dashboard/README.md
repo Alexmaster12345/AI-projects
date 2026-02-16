@@ -1,6 +1,6 @@
-# AI-Powered System Health Dashboard
+# AI-Powered System Trace Dashboard
 
-Local, real-time system monitoring dashboard.
+Local, real-time system trace monitoring dashboard.
 
 - Backend: FastAPI + `psutil`
 - Frontend: static HTML + Chart.js (CDN)
@@ -79,7 +79,7 @@ This dashboard includes a simple login system (cookie sessions) with a SQLite us
 
 - `AUTH_DB_PATH` (default: `data/auth.db`)
 - `SESSION_MAX_AGE_SECONDS` (default: `86400`)
-- `SESSION_COOKIE_NAME` (default: `ashd_session`)
+- `SESSION_COOKIE_NAME` (default: `system-trace_session`)
 - `SESSION_COOKIE_SAMESITE` (default: `strict`)
 - `SESSION_COOKIE_SECURE` (default: `0`) — set to `1` only when serving over HTTPS
 
@@ -121,8 +121,8 @@ To regenerate them locally, use the helper script:
 
 It requires Playwright (Chromium). The script reads credentials from env vars so you don't hardcode passwords:
 
-- `ASHD_USER`
-- `ASHD_PASS`
+- `System Trace_USER`
+- `System Trace_PASS`
 
 ### Create users (manual SQLite)
 
@@ -283,13 +283,13 @@ chronyc -a makestep
 #### Agent Issues
 ```bash
 # Check agent service
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Check agent logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 
 # Test agent manually
-sudo -u ashd-agent python3 /home/ashd-agent/ashd-agent/ashd_agent.py
+sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 ```
 
 ### Documentation

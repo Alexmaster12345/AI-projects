@@ -8,7 +8,7 @@ echo "=============================================="
 
 # Variables
 HOST="192.168.50.198"
-AGENT_DIR="/opt/ashd-agent"
+AGENT_DIR="/opt/system-trace-agent"
 
 echo "📁 Step 1: Creating agent directory on host..."
 ssh root@$HOST 'mkdir -p $AGENT_DIR'
@@ -20,11 +20,11 @@ ssh root@$HOST 'dnf install -y python3 python3-pip net-snmp net-snmp-utils chron
 echo "🐍 Step 3: Installing Python dependencies..."
 ssh root@$HOST 'python3 -m pip install psutil requests'
 
-echo "📝 Step 4: Creating ASHD agent..."
-cat << 'EOF' | ssh root@$HOST 'cat > $AGENT_DIR/ashd_agent.py'
+echo "📝 Step 4: Creating System Trace agent..."
+cat << 'EOF' | ssh root@$HOST 'cat > $AGENT_DIR/system-trace_agent.py'
 #!/usr/bin/env python3
 """
-ASHD Monitoring Agent for Rocky Linux
+System Trace Monitoring Agent for Rocky Linux
 """
 
 import json
@@ -37,7 +37,7 @@ import requests
 from pathlib import Path
 import os
 
-class ASHDAgent:
+class System TraceAgent:
     def __init__(self):
         self.server_url = "http://192.168.50.225:8001"
         self.hostname = socket.gethostname()
@@ -112,7 +112,7 @@ class ASHDAgent:
             return None
     
     def send_metrics(self, metrics):
-        """Send metrics to ASHD server."""
+        """Send metrics to System Trace server."""
         try:
             response = requests.post(
                 f"{self.server_url}/api/agent/metrics",
@@ -126,7 +126,7 @@ class ASHDAgent:
     
     def run(self):
         """Main agent loop."""
-        print(f"ASHD Agent starting for {self.hostname}")
+        print(f"System Trace Agent starting for {self.hostname}")
         print(f"Reporting to: {self.server_url}")
         
         while True:
@@ -149,13 +149,13 @@ class ASHDAgent:
                 time.sleep(10)
 
 if __name__ == "__main__":
-    agent = ASHDAgent()
+    agent = System TraceAgent()
     agent.run()
 EOF
 
 echo "⚙️  Step 5: Configuring SNMP..."
 cat << 'EOF' | ssh root@$HOST 'cat > /etc/snmp/snmpd.conf'
-# ASHD SNMP Configuration
+# System Trace SNMP Configuration
 # Basic SNMP v2c configuration
 
 # Listen on all interfaces
@@ -214,16 +214,16 @@ ssh root@$HOST 'firewall-cmd --permanent --add-port=123/udp'
 ssh root@$HOST 'firewall-cmd --reload'
 
 echo "🔄 Step 8: Creating systemd service..."
-cat << 'EOF' | ssh root@$HOST 'cat > /etc/systemd/system/ashd-agent.service'
+cat << 'EOF' | ssh root@$HOST 'cat > /etc/systemd/system/system-trace-agent.service'
 [Unit]
-Description=ASHD Monitoring Agent
+Description=System Trace Monitoring Agent
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/ashd-agent
-ExecStart=/usr/bin/python3 /opt/ashd-agent/ashd_agent.py
+WorkingDirectory=/opt/system-trace-agent
+ExecStart=/usr/bin/python3 /opt/system-trace-agent/system-trace_agent.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -239,8 +239,8 @@ ssh root@$HOST 'systemctl enable snmpd'
 ssh root@$HOST 'systemctl restart snmpd'
 ssh root@$HOST 'systemctl enable chronyd'
 ssh root@$HOST 'systemctl restart chronyd'
-ssh root@$HOST 'systemctl enable ashd-agent'
-ssh root@$HOST 'systemctl restart ashd-agent'
+ssh root@$HOST 'systemctl enable system-trace-agent'
+ssh root@$HOST 'systemctl restart system-trace-agent'
 
 echo "✅ Step 10: Verifying deployment..."
 echo ""
@@ -249,7 +249,7 @@ ssh root@$HOST 'systemctl status snmpd --no-pager -l'
 echo ""
 ssh root@$HOST 'systemctl status chronyd --no-pager -l'
 echo ""
-ssh root@$HOST 'systemctl status ashd-agent --no-pager -l'
+ssh root@$HOST 'systemctl status system-trace-agent --no-pager -l'
 
 echo ""
 echo "🧪 Testing SNMP:"
@@ -260,12 +260,12 @@ echo "🕐 Checking NTP:"
 ssh root@$HOST 'chronyc sources'
 
 echo ""
-echo "🌐 Testing SNMP from ASHD server:"
+echo "🌐 Testing SNMP from System Trace server:"
 snmpwalk -v2c -c public $HOST 1.3.6.1.2.1.1.1.0
 
 echo ""
 echo "🎯 Deployment completed!"
-echo "📋 Check ASHD dashboard: http://localhost:8001"
+echo "📋 Check System Trace dashboard: http://localhost:8001"
 echo "   SNMP should show: OK · $HOST:161 responding"
 echo "   NTP should show: OK · Time synchronized"
 echo "   Agent should show: OK · Metrics reporting"

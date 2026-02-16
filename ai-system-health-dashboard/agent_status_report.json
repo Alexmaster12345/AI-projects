@@ -3,7 +3,7 @@
   "target_ip": "192.168.50.198",
   "connectivity_test": "Pending",
   "snmp_test": "Pending",
-  "ashd_config": "Checked",
+  "system-trace_config": "Checked",
   "deployment_status": "Scripts ready",
   "next_steps": "Manual deployment required",
   "hostname_fix": {

@@ -6,7 +6,7 @@ SNMP: UNKNOWN · pysnmp not installed in rocky-git
 ```
 
 ## Root Cause
-- ASHD was trying to use pysnmp.hlapi API (v4+ syntax)
+- System Trace was trying to use pysnmp.hlapi API (v4+ syntax)
 - System has pysnmp v7.1.21 with different API structure
 - Import was failing causing "pysnmp not installed" error
 
@@ -49,7 +49,7 @@ result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout+2)
 - **Status**: SNMP checks now execute properly
 - **Result**: "SNMP timeout" (expected - agent not deployed yet)
 
-### **✅ ASHD Server: RELOADED**
+### **✅ System Trace Server: RELOADED**
 - Configuration automatically applied
 - SNMP checks now functional
 - Ready for agent deployment
@@ -124,7 +124,7 @@ snmpwalk -v2c -c public -t 5 -r 1 192.168.50.198:161 1.3.6.1.2.1.1.3.0
 ### **Immediate (Complete)**
 - ✅ pysnmp error resolved
 - ✅ SNMP checks functional
-- ✅ ASHD server reloaded
+- ✅ System Trace server reloaded
 - ✅ Ready for agent deployment
 
 ### **Optional (SNMP Agent Deployment)**
@@ -162,7 +162,7 @@ sudo firewall-cmd --list-all | grep snmp
 
 ## Dashboard Status
 
-After the fix, the ASHD dashboard should show:
+After the fix, the System Trace dashboard should show:
 - **Configuration Page**: SNMP settings visible
 - **Overview Page**: SNMP status shows "SNMP timeout" (expected)
 - **System Logs**: No more "pysnmp not installed" errors

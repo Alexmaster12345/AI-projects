@@ -2,7 +2,7 @@
 
 ## ✅ System Status: Non-Root Deployment Ready
 
-I've successfully created a comprehensive non-root agent deployment system that installs ASHD monitoring agents using regular user accounts with minimal privileges.
+I've successfully created a comprehensive non-root agent deployment system that installs System Trace monitoring agents using regular user accounts with minimal privileges.
 
 ## 🎯 Security Benefits
 
@@ -14,7 +14,7 @@ I've successfully created a comprehensive non-root agent deployment system that 
 - ✅ **Compliance**: Meets security best practices
 
 ### **Minimal Sudo Permissions**
-The `ashd-agent` user gets sudo access only for:
+The `system-trace-agent` user gets sudo access only for:
 - `systemctl status` commands (read-only)
 - `chronyc` / `ntpq` (NTP status queries)
 - `snmpwalk` (SNMP queries)
@@ -54,7 +54,7 @@ Complete non-root deployment packages for **5 operating systems**:
 - ✅ **Rocky Linux** (`deploy_rocky_agent_non_root.sh`)
 
 ### **Each Package Includes**
-- **Non-Root Agent** (`ashd_agent_non_root.py`) - Runs as limited user
+- **Non-Root Agent** (`system-trace_agent_non_root.py`) - Runs as limited user
 - **Deployment Script** - Creates user and sets up permissions
 - **User Setup Script** - Configures user environment
 - **Sudo Configuration** - Minimal privilege escalation
@@ -63,12 +63,12 @@ Complete non-root deployment packages for **5 operating systems**:
 
 ### **What Non-Root Deployment Does**
 
-1. **Creates Dedicated User**: `ashd-agent` with limited privileges
+1. **Creates Dedicated User**: `system-trace-agent` with limited privileges
 2. **Installs Packages**: Python, SNMP, NTP as root (one-time setup)
-3. **Sets Up Home Directory**: `/home/ashd-agent/ashd-agent/`
+3. **Sets Up Home Directory**: `/home/system-trace-agent/system-trace-agent/`
 4. **Configures Sudo**: Minimal permissions for monitoring commands
 5. **Deploys Agent**: Runs as non-root user with sudo for specific tasks
-6. **Creates Service**: Systemd service runs as `ashd-agent` user
+6. **Creates Service**: Systemd service runs as `system-trace-agent` user
 7. **Configures Security**: Firewall, SNMP, NTP with proper permissions
 
 ### **Security Isolation**
@@ -85,11 +85,11 @@ After non-root deployment:
 SNMP: OK · 192.168.50.198:161 responding
 NTP: OK · Time synchronized
 Agent: OK · Metrics reporting normally
-User: ashd-agent (shown in metrics)
+User: system-trace-agent (shown in metrics)
 ```
 
 ### **Security Indicators**
-- **User Context**: All metrics show "user": "ashd-agent"
+- **User Context**: All metrics show "user": "system-trace-agent"
 - **Limited Privileges**: Agent operates with minimal permissions
 - **Audit Trail**: Clear separation from root activities
 
@@ -109,28 +109,28 @@ User: ashd-agent (shown in metrics)
 ### **Agent Management (Non-Root)**
 ```bash
 # Check agent status
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Restart agent
-systemctl restart ashd-agent
+systemctl restart system-trace-agent
 
 # View agent logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 
 # Test agent manually
-sudo -u ashd-agent python3 /home/ashd-agent/ashd-agent/ashd_agent.py
+sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 ```
 
 ### **User Management**
 ```bash
 # Switch to agent user
-sudo -u ashd-agent -i
+sudo -u system-trace-agent -i
 
 # Check user permissions
-sudo -u ashd-agent sudo -l
+sudo -u system-trace-agent sudo -l
 
 # List agent files
-ls -la /home/ashd-agent/ashd-agent/
+ls -la /home/system-trace-agent/system-trace-agent/
 ```
 
 ## 🔍 Verification Steps
@@ -138,14 +138,14 @@ ls -la /home/ashd-agent/ashd-agent/
 ### **Post-Deployment Verification**
 ```bash
 # 1. Check service status
-systemctl status ashd-agent snmpd chronyd
+systemctl status system-trace-agent snmpd chronyd
 
 # 2. Verify user context
-id ashd-agent
-ls -la /home/ashd-agent/
+id system-trace-agent
+ls -la /home/system-trace-agent/
 
 # 3. Test SNMP as non-root
-sudo -u ashd-agent sudo snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
+sudo -u system-trace-agent sudo snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
 
 # 4. Check dashboard
 http://localhost:8001
@@ -154,11 +154,11 @@ http://localhost:8001
 ### **Security Verification**
 ```bash
 # Check sudo permissions
-sudo -u ashd-agent sudo -l
+sudo -u system-trace-agent sudo -l
 
 # Verify limited access
-sudo -u ashd-agent ls /root  # Should fail
-sudo -u ashd-agent cat /etc/shadow  # Should fail
+sudo -u system-trace-agent ls /root  # Should fail
+sudo -u system-trace-agent cat /etc/shadow  # Should fail
 ```
 
 ## 📚 Documentation Created
@@ -203,7 +203,7 @@ sudo -u ashd-agent cat /etc/shadow  # Should fail
 
 **Status**: ✅ **Non-root deployment system complete and operational**
 **Security**: 🔐 **Enhanced with minimal privilege user**
-**User**: ashd-agent (dedicated non-root user)
+**User**: system-trace-agent (dedicated non-root user)
 **Deployment**: Scripts ready for all OS types
 **Benefits**: Same monitoring capabilities with enhanced security
 

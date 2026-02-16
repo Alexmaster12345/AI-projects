@@ -21,7 +21,7 @@ SNMP_HOST=192.168.50.198
 ✅ Hostname resolution: Working
 ```
 
-### **✅ ASHD Server Reloaded**
+### **✅ System Trace Server Reloaded**
 - Configuration automatically applied
 - Monitoring now targets correct IP
 - Ready for agent deployment
@@ -44,7 +44,7 @@ ssh root@192.168.50.198
 sudo ./fix_ntp_centos_docker.sh
 ```
 
-### **Step 4: Deploy ASHD Agent**
+### **Step 4: Deploy System Trace Agent**
 ```bash
 sudo ./deploy_centos_docker_agent.sh
 ```
@@ -54,7 +54,7 @@ sudo ./deploy_centos_docker_agent.sh
 # Check services
 systemctl status snmpd
 systemctl status ntpd
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Test SNMP
 snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
@@ -63,7 +63,7 @@ snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
 ntpq -p
 
 # Check agent logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 ```
 
 ### **Step 6: Return and Check Dashboard**
@@ -100,14 +100,14 @@ Agent: OK · Metrics reporting normally
 ### **Agent Checks (on centos-docker)**
 - [ ] SNMP service running: `systemctl status snmpd`
 - [ ] NTP service running: `systemctl status ntpd`
-- [ ] ASHD agent running: `systemctl status ashd-agent`
+- [ ] System Trace agent running: `systemctl status system-trace-agent`
 - [ ] SNMP responding: `snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0`
 - [ ] NTP synchronized: `ntpq -p`
 
 ### **Network Checks**
-- [ ] Ping from ASHD server: `ping 192.168.50.198`
+- [ ] Ping from System Trace server: `ping 192.168.50.198`
 - [ ] Ping hostname: `ping centos-docker`
-- [ ] SNMP from ASHD server: `snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0`
+- [ ] SNMP from System Trace server: `snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0`
 
 ## 🛠️ Troubleshooting
 
@@ -141,18 +141,18 @@ systemctl restart ntpd
 ### **Agent Issues**
 ```bash
 # Check agent service
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Check agent logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 
 # Test agent manually
-/opt/ashd-agent/ashd_agent.py
+/opt/system-trace-agent/system-trace_agent.py
 ```
 
 ### **Connectivity Issues**
 ```bash
-# Test from ASHD server
+# Test from System Trace server
 ping -c 3 192.168.50.198
 
 # Test hostname resolution

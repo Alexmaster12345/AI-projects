@@ -1,11 +1,11 @@
 #!/bin/bash
-# ASHD Agent Deployment Script for Ubuntu (Non-Root Version)
+# System Trace Agent Deployment Script for Ubuntu (Non-Root Version)
 
 set -e
 
-AGENT_USER="ashd-agent"
-AGENT_DIR="/home/$AGENT_USER/ashd-agent"
-SERVICE_NAME="ashd-agent"
+AGENT_USER="system-trace-agent"
+AGENT_DIR="/home/$AGENT_USER/system-trace-agent"
+SERVICE_NAME="system-trace-agent"
 
 # Colors
 GREEN='\033[0;32m'
@@ -24,7 +24,7 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-echo "🚀 Deploying ASHD Agent for Ubuntu (Non-Root)"
+echo "🚀 Deploying System Trace Agent for Ubuntu (Non-Root)"
 echo "=================================================="
 
 echo "📋 Step 1: Creating agent user..."
@@ -49,9 +49,9 @@ mkdir -p "$AGENT_DIR"
 chown $AGENT_USER:$AGENT_USER "$AGENT_DIR"
 
 echo "📝 Step 5: Copying agent files..."
-cp ashd_agent_non_root.py "$AGENT_DIR/ashd_agent.py"
-chown $AGENT_USER:$AGENT_USER "$AGENT_DIR/ashd_agent.py"
-chmod +x "$AGENT_DIR/ashd_agent.py"
+cp system-trace_agent_non_root.py "$AGENT_DIR/system-trace_agent.py"
+chown $AGENT_USER:$AGENT_USER "$AGENT_DIR/system-trace_agent.py"
+chmod +x "$AGENT_DIR/system-trace_agent.py"
 
 echo "⚙️  Step 6: Configuring SNMP..."
 # Backup original config
@@ -59,7 +59,7 @@ echo "⚙️  Step 6: Configuring SNMP..."
 
 # Create new SNMP config
 cat > /etc/snmp/snmpd.conf << 'EOF'
-# ASHD SNMP Configuration
+# System Trace SNMP Configuration
 agentAddress udp:161
 com2sec readonly public
 group MyROGroup v2c readonly
@@ -95,27 +95,27 @@ ufw --force enable
 
 
 echo "🔐 Step 9: Setting up sudo permissions..."
-cat > /etc/sudoers.d/ashd-agent << 'EOF'
-# ASHD Agent sudo permissions
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status snmpd
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status ntp
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/chronyc
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/ntpq
-ashd-agent ALL=(ALL) NOPASSWD: /usr/sbin/snmpwalk
+cat > /etc/sudoers.d/system-trace-agent << 'EOF'
+# System Trace Agent sudo permissions
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status snmpd
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status ntp
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/chronyc
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/ntpq
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/sbin/snmpwalk
 EOF
 
 echo "🔄 Step 10: Creating systemd service..."
-cat > /etc/systemd/system/ashd-agent.service << EOF
+cat > /etc/systemd/system/system-trace-agent.service << EOF
 [Unit]
-Description=ASHD Monitoring Agent (Non-Root)
+Description=System Trace Monitoring Agent (Non-Root)
 After=network.target
 
 [Service]
 Type=simple
-User=ashd-agent
-Group=ashd-agent
+User=system-trace-agent
+Group=system-trace-agent
 WorkingDirectory=$AGENT_DIR
-ExecStart=/usr/bin/python3 $AGENT_DIR/ashd_agent.py
+ExecStart=/usr/bin/python3 $AGENT_DIR/system-trace_agent.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -135,18 +135,18 @@ systemctl enable $SERVICE_NAME
 systemctl restart $SERVICE_NAME
 
 echo "✅ Step 12: Setting up log rotation..."
-mkdir -p /var/log/ashd-agent
-chown $AGENT_USER:$AGENT_USER /var/log/ashd-agent
+mkdir -p /var/log/system-trace-agent
+chown $AGENT_USER:$AGENT_USER /var/log/system-trace-agent
 
-cat > /etc/logrotate.d/ashd-agent << EOF
-/var/log/ashd-agent/*.log {
+cat > /etc/logrotate.d/system-trace-agent << EOF
+/var/log/system-trace-agent/*.log {
     daily
     missingok
     rotate 7
     compress
     delaycompress
     notifempty
-    create 644 ashd-agent ashd-agent
+    create 644 system-trace-agent system-trace-agent
 }
 EOF
 
@@ -171,7 +171,7 @@ fi
 
 echo ""
 print_status "Agent Test:"
-sudo -u $AGENT_USER python3 $AGENT_DIR/ashd_agent.py &
+sudo -u $AGENT_USER python3 $AGENT_DIR/system-trace_agent.py &
 AGENT_PID=$!
 sleep 3
 kill $AGENT_PID 2>/dev/null || true
@@ -183,13 +183,13 @@ echo ""
 echo "📋 Agent Information:"
 echo "- User: $AGENT_USER"
 echo "- Home: /home/$AGENT_USER"
-echo "- Agent: $AGENT_DIR/ashd_agent.py"
-echo "- Logs: journalctl -u ashd-agent -f"
+echo "- Agent: $AGENT_DIR/system-trace_agent.py"
+echo "- Logs: journalctl -u system-trace-agent -f"
 echo ""
 echo "🔧 Management Commands:"
-echo "- Restart: systemctl restart ashd-agent"
-echo "- Status: systemctl status ashd-agent"
-echo "- Logs: journalctl -u ashd-agent -f"
-echo "- Test: sudo -u $AGENT_USER python3 $AGENT_DIR/ashd_agent.py"
+echo "- Restart: systemctl restart system-trace-agent"
+echo "- Status: systemctl status system-trace-agent"
+echo "- Logs: journalctl -u system-trace-agent -f"
+echo "- Test: sudo -u $AGENT_USER python3 $AGENT_DIR/system-trace_agent.py"
 echo ""
-echo "🌐 Check ASHD dashboard: http://localhost:8001"
+echo "🌐 Check System Trace dashboard: http://localhost:8001"

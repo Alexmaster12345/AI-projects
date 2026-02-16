@@ -14,19 +14,19 @@ ssh root@192.168.50.198
 ### **One-Command Setup (Copy & Paste)**
 ```bash
 # Create agent user and install packages
-useradd -m -s /bin/bash ashd-agent && \
+useradd -m -s /bin/bash system-trace-agent && \
 dnf update -y && \
 dnf install -y python3 python3-pip net-snmp net-snmp-utils chrony && \
-sudo -u ashd-agent python3 -m pip install --user psutil requests && \
-mkdir -p /home/ashd-agent/ashd-agent && \
-chown ashd-agent:ashd-agent /home/ashd-agent/ashd-agent
+sudo -u system-trace-agent python3 -m pip install --user psutil requests && \
+mkdir -p /home/system-trace-agent/system-trace-agent && \
+chown system-trace-agent:system-trace-agent /home/system-trace-agent/system-trace-agent
 
 # Create agent script
-cat > /home/ashd-agent/ashd-agent/ashd_agent.py << 'AGENT_EOF'
+cat > /home/system-trace-agent/system-trace-agent/system-trace_agent.py << 'AGENT_EOF'
 #!/usr/bin/env python3
 import json, time, subprocess, socket, psutil, requests, os, pwd
 
-class NonRootASHDAgent:
+class NonRootSystem TraceAgent:
     def __init__(self):
         self.server_url = "http://192.168.50.225:8001"
         self.hostname = socket.gethostname()
@@ -56,7 +56,7 @@ class NonRootASHDAgent:
             service_status = {
                 'snmpd': self._check_service('snmpd'),
                 'chronyd': self._check_service('chronyd'),
-                'ashd-agent': self._check_service('ashd-agent')
+                'system-trace-agent': self._check_service('system-trace-agent')
             }
             
             ntp_status = self._get_ntp_status()
@@ -110,7 +110,7 @@ class NonRootASHDAgent:
             return False
     
     def run(self):
-        print(f"ASHD Agent starting for {self.hostname} (user: {self.user})")
+        print(f"System Trace Agent starting for {self.hostname} (user: {self.user})")
         while True:
             try:
                 metrics = self.get_system_metrics()
@@ -124,7 +124,7 @@ class NonRootASHDAgent:
                 time.sleep(10)
 
 if __name__ == "__main__":
-    NonRootASHDAgent().run()
+    NonRootSystem TraceAgent().run()
 AGENT_EOF
 
 # Configure SNMP
@@ -149,25 +149,25 @@ local stratum 10
 NTP_EOF
 
 # Setup sudo permissions
-cat > /etc/sudoers.d/ashd-agent << 'SUDO_EOF'
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status snmpd
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status chronyd
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/chronyc
-ashd-agent ALL=(ALL) NOPASSWD: /usr/sbin/snmpwalk
+cat > /etc/sudoers.d/system-trace-agent << 'SUDO_EOF'
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status snmpd
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status chronyd
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/chronyc
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/sbin/snmpwalk
 SUDO_EOF
 
 # Create systemd service
-cat > /etc/systemd/system/ashd-agent.service << 'SERVICE_EOF'
+cat > /etc/systemd/system/system-trace-agent.service << 'SERVICE_EOF'
 [Unit]
-Description=ASHD Monitoring Agent (Non-Root)
+Description=System Trace Monitoring Agent (Non-Root)
 After=network.target
 
 [Service]
 Type=simple
-User=ashd-agent
-Group=ashd-agent
-WorkingDirectory=/home/ashd-agent/ashd-agent
-ExecStart=/usr/bin/python3 /home/ashd-agent/ashd-agent/ashd_agent.py
+User=system-trace-agent
+Group=system-trace-agent
+WorkingDirectory=/home/system-trace-agent/system-trace-agent
+ExecStart=/usr/bin/python3 /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 Restart=always
 RestartSec=10
 
@@ -176,8 +176,8 @@ WantedBy=multi-user.target
 SERVICE_EOF
 
 # Set permissions
-chown -R ashd-agent:ashd-agent /home/ashd-agent/ashd-agent/
-chmod +x /home/ashd-agent/ashd-agent/ashd_agent.py
+chown -R system-trace-agent:system-trace-agent /home/system-trace-agent/system-trace-agent/
+chmod +x /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 
 # Configure firewall
 firewall-cmd --permanent --add-port=161/udp && \
@@ -188,13 +188,13 @@ firewall-cmd --reload
 systemctl daemon-reload && \
 systemctl enable snmpd && systemctl restart snmpd && \
 systemctl enable chronyd && systemctl restart chronyd && \
-systemctl enable ashd-agent && systemctl restart ashd-agent && \
+systemctl enable system-trace-agent && systemctl restart system-trace-agent && \
 echo "✅ Non-root deployment completed!" && \
 echo "" && \
 echo "=== Service Status ===" && \
 systemctl status snmpd --no-pager -l | head -5 && \
 systemctl status chronyd --no-pager -l | head -5 && \
-systemctl status ashd-agent --no-pager -l | head -5 && \
+systemctl status system-trace-agent --no-pager -l | head -5 && \
 echo "" && \
 echo "=== SNMP Test ===" && \
 snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0 && \
@@ -203,7 +203,7 @@ echo "=== NTP Test ===" && \
 chronyc sources && \
 echo "" && \
 echo "=== Agent User ===" && \
-id ashd-agent && \
+id system-trace-agent && \
 echo "" && \
 echo "🎯 Check dashboard: http://localhost:8001"
 ```
@@ -212,7 +212,7 @@ echo "🎯 Check dashboard: http://localhost:8001"
 ```bash
 exit
 
-# Test from ASHD server
+# Test from System Trace server
 snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0
 ping -c 3 192.168.50.198
 ```
@@ -229,7 +229,7 @@ NTP: UNKNOWN · no NTP response
 ```
 SNMP: OK · 192.168.50.198:161 responding
 NTP: OK · Time synchronized
-Agent: OK · Metrics reporting normally (user: ashd-agent)
+Agent: OK · Metrics reporting normally (user: system-trace-agent)
 ```
 
 ## 📊 Dashboard Verification
@@ -240,7 +240,7 @@ Look for:
 - ✅ SNMP status green
 - ✅ NTP status green  
 - ✅ Agent metrics appearing
-- ✅ User shown as "ashd-agent"
+- ✅ User shown as "system-trace-agent"
 
 ## ⏱️ Expected Timeline
 

@@ -33,15 +33,15 @@ Created a comprehensive auto-discovery and multi-platform agent deployment syste
 Each OS has a complete agent package with 4 files:
 
 #### **Ubuntu/Debian (apt-based)**
-- `ashd_agent.py` - Python monitoring agent
+- `system-trace_agent.py` - Python monitoring agent
 - `deploy_ubuntu_agent.sh` / `deploy_debian_agent.sh` - Deployment script
-- `ashd-agent.service` - Systemd service file
+- `system-trace-agent.service` - Systemd service file
 - `snmpd.conf` - SNMP configuration
 
 #### **RHEL/CentOS/Rocky (yum/dnf-based)**
-- `ashd_agent.py` - Python monitoring agent
+- `system-trace_agent.py` - Python monitoring agent
 - `deploy_rhel_agent.sh` / `deploy_centos_agent.sh` / `deploy_rocky_agent.sh` - Deployment script
-- `ashd-agent.service` - Systemd service file
+- `system-trace-agent.service` - Systemd service file
 - `snmpd.conf` - SNMP configuration
 
 ### **Agent Capabilities**
@@ -72,7 +72,7 @@ Each OS has a complete agent package with 4 files:
 
 ## 🔧 Configuration Updates
 
-### **ASHD Environment (.env)**
+### **System Trace Environment (.env)**
 ```bash
 # Added discovered hosts
 DISCOVERED_HOSTS=192.168.50.81,192.168.50.89,192.168.50.1,192.168.50.198
@@ -91,29 +91,29 @@ PRIMARY_HOSTNAME=centos-docker
 ```
 agents/
 ├── ubuntu/
-│   ├── ashd_agent.py
+│   ├── system-trace_agent.py
 │   ├── deploy_ubuntu_agent.sh
-│   ├── ashd-agent.service
+│   ├── system-trace-agent.service
 │   └── snmpd.conf
 ├── debian/
-│   ├── ashd_agent.py
+│   ├── system-trace_agent.py
 │   ├── deploy_debian_agent.sh
-│   ├── ashd-agent.service
+│   ├── system-trace-agent.service
 │   └── snmpd.conf
 ├── rhel/
-│   ├── ashd_agent.py
+│   ├── system-trace_agent.py
 │   ├── deploy_rhel_agent.sh
-│   ├── ashd-agent.service
+│   ├── system-trace-agent.service
 │   └── snmpd.conf
 ├── centos/
-│   ├── ashd_agent.py
+│   ├── system-trace_agent.py
 │   ├── deploy_centos_agent.sh
-│   ├── ashd-agent.service
+│   ├── system-trace-agent.service
 │   └── snmpd.conf
 └── rocky/
-    ├── ashd_agent.py
+    ├── system-trace_agent.py
     ├── deploy_rocky_agent.sh
-    ├── ashd-agent.service
+    ├── system-trace-agent.service
     └── snmpd.conf
 
 app/static/
@@ -140,9 +140,9 @@ deployment_plan.json (Deployment commands)
 ### **Manual Deployment (if needed)**
 ```bash
 # Example for Rocky Linux (192.168.50.198)
-scp agents/rocky/ashd_agent.py root@192.168.50.198:/opt/ashd-agent/
+scp agents/rocky/system-trace_agent.py root@192.168.50.198:/opt/system-trace-agent/
 scp agents/rocky/deploy_rocky_agent.sh root@192.168.50.198:/tmp/
-scp agents/rocky/ashd-agent.service root@192.168.50.198:/tmp/
+scp agents/rocky/system-trace-agent.service root@192.168.50.198:/tmp/
 scp agents/rocky/snmpd.conf root@192.168.50.198:/tmp/
 
 ssh root@192.168.50.198 'chmod +x /tmp/deploy_rocky_agent.sh'
@@ -186,10 +186,10 @@ ssh -o ConnectTimeout=5 root@<host-ip> 'hostname'
 ### **Agent Deployment Issues**
 ```bash
 # Check service status
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Check logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 
 # Verify SNMP
 snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0

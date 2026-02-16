@@ -27,15 +27,15 @@ python3 -m pip install psutil requests
 
 ### **Step 4: Create Agent Directory**
 ```bash
-mkdir -p /opt/ashd-agent
+mkdir -p /opt/system-trace-agent
 ```
 
-### **Step 5: Create ASHD Agent**
+### **Step 5: Create System Trace Agent**
 ```bash
-cat > /opt/ashd-agent/ashd_agent.py << 'EOF'
+cat > /opt/system-trace-agent/system-trace_agent.py << 'EOF'
 #!/usr/bin/env python3
 """
-ASHD Monitoring Agent for Rocky Linux
+System Trace Monitoring Agent for Rocky Linux
 """
 
 import json
@@ -48,7 +48,7 @@ import requests
 from pathlib import Path
 import os
 
-class ASHDAgent:
+class System TraceAgent:
     def __init__(self):
         self.server_url = "http://192.168.50.225:8001"
         self.hostname = socket.gethostname()
@@ -123,7 +123,7 @@ class ASHDAgent:
             return None
     
     def send_metrics(self, metrics):
-        """Send metrics to ASHD server."""
+        """Send metrics to System Trace server."""
         try:
             response = requests.post(
                 f"{self.server_url}/api/agent/metrics",
@@ -137,7 +137,7 @@ class ASHDAgent:
     
     def run(self):
         """Main agent loop."""
-        print(f"ASHD Agent starting for {self.hostname}")
+        print(f"System Trace Agent starting for {self.hostname}")
         print(f"Reporting to: {self.server_url}")
         
         while True:
@@ -160,17 +160,17 @@ class ASHDAgent:
                 time.sleep(10)
 
 if __name__ == "__main__":
-    agent = ASHDAgent()
+    agent = System TraceAgent()
     agent.run()
 EOF
 
-chmod +x /opt/ashd-agent/ashd_agent.py
+chmod +x /opt/system-trace-agent/system-trace_agent.py
 ```
 
 ### **Step 6: Configure SNMP**
 ```bash
 cat > /etc/snmp/snmpd.conf << 'EOF'
-# ASHD SNMP Configuration
+# System Trace SNMP Configuration
 # Basic SNMP v2c configuration
 
 # Listen on all interfaces
@@ -235,16 +235,16 @@ firewall-cmd --reload
 
 ### **Step 9: Create Systemd Service**
 ```bash
-cat > /etc/systemd/system/ashd-agent.service << 'EOF'
+cat > /etc/systemd/system/system-trace-agent.service << 'EOF'
 [Unit]
-Description=ASHD Monitoring Agent
+Description=System Trace Monitoring Agent
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/ashd-agent
-ExecStart=/usr/bin/python3 /opt/ashd-agent/ashd_agent.py
+WorkingDirectory=/opt/system-trace-agent
+ExecStart=/usr/bin/python3 /opt/system-trace-agent/system-trace_agent.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -262,8 +262,8 @@ systemctl enable snmpd
 systemctl restart snmpd
 systemctl enable chronyd
 systemctl restart chronyd
-systemctl enable ashd-agent
-systemctl restart ashd-agent
+systemctl enable system-trace-agent
+systemctl restart system-trace-agent
 ```
 
 ### **Step 11: Verify Deployment**
@@ -271,7 +271,7 @@ systemctl restart ashd-agent
 # Check service status
 systemctl status snmpd
 systemctl status chronyd
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Test SNMP locally
 snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
@@ -280,14 +280,14 @@ snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
 chronyc sources
 ```
 
-### **Step 12: Exit and Test from ASHD Server**
+### **Step 12: Exit and Test from System Trace Server**
 ```bash
 exit
 ```
 
-Now test from the ASHD server:
+Now test from the System Trace server:
 ```bash
-# Test SNMP from ASHD server
+# Test SNMP from System Trace server
 snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0
 
 # Test ICMP
@@ -296,7 +296,7 @@ ping -c 3 192.168.50.198
 
 ## 🌐 Verify on Dashboard
 
-Open the ASHD dashboard:
+Open the System Trace dashboard:
 ```
 http://localhost:8001
 ```
@@ -342,13 +342,13 @@ chronyc sources
 ### **If Agent Fails**
 ```bash
 # Check agent service
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Check agent logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 
 # Test agent manually
-python3 /opt/ashd-agent/ashd_agent.py
+python3 /opt/system-trace-agent/system-trace_agent.py
 ```
 
 ## 🎯 Expected Timeline
@@ -362,7 +362,7 @@ python3 /opt/ashd-agent/ashd_agent.py
 
 ✅ **SNMP Test**: `snmpwalk` returns system information  
 ✅ **NTP Test**: `chronyc sources` shows time servers  
-✅ **Agent Test**: `systemctl status ashd-agent` shows active  
+✅ **Agent Test**: `systemctl status system-trace-agent` shows active  
 ✅ **Dashboard**: All protocols show green status  
 ✅ **Metrics**: System data appearing in dashboard  
 

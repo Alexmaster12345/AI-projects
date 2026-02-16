@@ -1,14 +1,14 @@
 #!/bin/bash
-# ASHD Agent Deployment Script for Rocky
+# System Trace Agent Deployment Script for Rocky
 
 set -e
 
-echo "🚀 Deploying ASHD Agent for Rocky"
+echo "🚀 Deploying System Trace Agent for Rocky"
 echo "=========================================="
 
 # Variables
-AGENT_DIR="/opt/ashd-agent"
-SERVICE_NAME="ashd-agent"
+AGENT_DIR="/opt/system-trace-agent"
+SERVICE_NAME="system-trace-agent"
 SERVER_URL="http://192.168.50.225:8001"
 
 echo "📦 Installing dependencies..."
@@ -35,8 +35,8 @@ mkdir -p $AGENT_DIR
 
 echo "📝 Copying agent files..."
 # These files will be copied during deployment
-cp ashd_agent.py $AGENT_DIR/
-cp ashd-agent.service /etc/systemd/system/
+cp system-trace_agent.py $AGENT_DIR/
+cp system-trace-agent.service /etc/systemd/system/
 
 echo "🔧 Configuring SNMP..."
 # Backup original SNMP config

@@ -1,8 +1,8 @@
-# ASHD Network Monitoring Guide
+# System Trace Network Monitoring Guide
 
 ## Overview
 
-ASHD is now configured for comprehensive network monitoring supporting your three key use cases:
+System Trace is now configured for comprehensive network monitoring supporting your three key use cases:
 - **Network Performance Monitoring**
 - **Fault Detection** 
 - **Device Inventory Management**
@@ -20,7 +20,7 @@ ASHD is now configured for comprehensive network monitoring supporting your thre
 
 ### 1. Network Performance Monitoring
 
-ASHD monitors network performance through:
+System Trace monitors network performance through:
 
 #### **Real-time Metrics**
 - **ICMP Response Time**: Tracks latency to 192.168.50.225
@@ -40,7 +40,7 @@ ASHD monitors network performance through:
 
 ### 2. Fault Detection
 
-ASHD provides comprehensive fault detection:
+System Trace provides comprehensive fault detection:
 
 #### **Automated Detection**
 - **Device Unavailability**: Immediate alerts when target is unreachable
@@ -62,7 +62,7 @@ ASHD provides comprehensive fault detection:
 
 ### 3. Device Inventory Management
 
-ASHD maintains comprehensive device inventory:
+System Trace maintains comprehensive device inventory:
 
 #### **Discovered Devices**
 ```json
@@ -106,7 +106,7 @@ Device List:
 - **Current Settings**: ICMP target and timeouts
 - **Protocol Configuration**: NTP, ICMP, SNMP settings
 - **Monitoring Intervals**: Check frequency configuration
-- **System Information**: ASHD version and status
+- **System Information**: System Trace version and status
 
 ## Monitoring Workflow
 
@@ -249,7 +249,7 @@ curl http://localhost:8001/api/metrics
 For additional assistance:
 - **Dashboard**: http://localhost:8001
 - **Configuration**: Check Configuration page
-- **Documentation**: Review ASHD documentation
+- **Documentation**: Review System Trace documentation
 - **Scripts**: Use provided setup and configuration scripts
 
 ---

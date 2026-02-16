@@ -1,8 +1,8 @@
-# SNMP Configuration Guide for ASHD
+# SNMP Configuration Guide for System Trace
 
 ## Overview
 
-ASHD supports SNMP monitoring to track the health and availability of network devices, servers, and infrastructure equipment. This guide explains how to configure SNMP monitoring.
+System Trace supports SNMP monitoring to track the health and availability of network devices, servers, and infrastructure equipment. This guide explains how to configure SNMP monitoring.
 
 ## Current Status
 
@@ -19,14 +19,14 @@ Perfect for testing SNMP functionality without real hardware:
 cd /home/alexk/AI-projects/ai-system-health-dashboard
 python scripts/snmp_simulator.py
 
-# 2. In another terminal, configure ASHD
+# 2. In another terminal, configure System Trace
 python scripts/setup_snmp.py
 # Enter: localhost
 # Enter: 1161 (if simulator uses alternative port)
 # Enter: public
 # Enter: 2
 
-# 3. Restart ASHD server
+# 3. Restart System Trace server
 # Stop current server (Ctrl+C) and restart:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
@@ -39,13 +39,13 @@ If you have a real SNMP device (router, switch, server):
 # 1. Test SNMP connectivity
 python scripts/test_snmp_devices.py
 
-# 2. Configure ASHD with working device
+# 2. Configure System Trace with working device
 python scripts/setup_snmp.py
 # Enter the IP/hostname of your SNMP device
 # Enter community string (usually "public")
 # Enter port (usually 161)
 
-# 3. Restart ASHD server
+# 3. Restart System Trace server
 ```
 
 ## Configuration Parameters
@@ -167,14 +167,14 @@ SNMP port 161 requires root privileges. Use alternative port for testing:
 SNMP_PORT=1161
 ```
 
-### ASHD Still Shows "Not Configured"
+### System Trace Still Shows "Not Configured"
 
 1. **Check .env file**:
    ```bash
    cat .env | grep SNMP
    ```
 
-2. **Restart ASHD server**:
+2. **Restart System Trace server**:
    - Stop current server (Ctrl+C)
    - Start again: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8001`
 
@@ -193,8 +193,8 @@ For monitoring multiple devices, you can:
    - Nagios
    - Prometheus with SNMP exporter
 
-2. **Configure ASHD for critical device**:
-   - Choose most important device for ASHD monitoring
+2. **Configure System Trace for critical device**:
+   - Choose most important device for System Trace monitoring
    - Use NMS for comprehensive monitoring
 
 ### SNMPv3 Configuration
@@ -219,9 +219,9 @@ SNMP_PRIV_PASSWORD=secret456
 4. **Monitor SNMP logs** for unusual activity
 5. **Use firewall rules** to limit SNMP access
 
-## Integration with ASHD
+## Integration with System Trace
 
-Once SNMP is configured, ASHD will:
+Once SNMP is configured, System Trace will:
 
 - ✅ Show SNMP status on dashboard
 - ✅ Monitor device availability
@@ -235,7 +235,7 @@ The SNMP status will change from:
 
 ## Support Scripts
 
-ASHD includes helpful scripts:
+System Trace includes helpful scripts:
 
 - `scripts/setup_snmp.py` - Interactive SNMP configuration
 - `scripts/test_snmp_devices.py` - Test multiple devices
@@ -245,8 +245,8 @@ ASHD includes helpful scripts:
 
 1. Choose setup option (simulator vs real device)
 2. Configure SNMP using setup script
-3. Restart ASHD server
+3. Restart System Trace server
 4. Verify SNMP status on dashboard
 5. Monitor SNMP performance in overview
 
-For additional help, check the ASHD documentation or create an issue on GitHub.
+For additional help, check the System Trace documentation or create an issue on GitHub.

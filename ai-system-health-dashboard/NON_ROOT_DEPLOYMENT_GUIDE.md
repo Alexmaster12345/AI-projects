@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-This guide shows how to deploy ASHD monitoring agents as non-root users, which is more secure and suitable for production environments.
+This guide shows how to deploy System Trace monitoring agents as non-root users, which is more secure and suitable for production environments.
 
 ## 📊 Security Benefits
 
@@ -39,13 +39,13 @@ sudo /tmp/deploy_rocky_agent_non_root.sh
 ### **Step 3: Verify Deployment**
 ```bash
 # Check service status
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Check agent user
-id ashd-agent
+id system-trace-agent
 
 # Test agent as non-root user
-sudo -u ashd-agent python3 /home/ashd-agent/ashd-agent/ashd_agent.py &
+sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/system-trace_agent.py &
 ```
 
 ## 📋 Manual Non-Root Deployment
@@ -53,7 +53,7 @@ sudo -u ashd-agent python3 /home/ashd-agent/ashd-agent/ashd_agent.py &
 ### **Step 1: Create Agent User**
 ```bash
 # Create dedicated user
-sudo useradd -m -s /bin/bash ashd-agent
+sudo useradd -m -s /bin/bash system-trace-agent
 ```
 
 ### **Step 2: Install Packages**
@@ -70,29 +70,29 @@ sudo apt install -y python3 python3-pip net-snmp snmpd ntp
 ### **Step 3: Install Python Dependencies**
 ```bash
 # Install as agent user
-sudo -u ashd-agent python3 -m pip install --user psutil requests
+sudo -u system-trace-agent python3 -m pip install --user psutil requests
 ```
 
 ### **Step 4: Create Agent Directory**
 ```bash
 # Create agent home directory
-sudo mkdir -p /home/ashd-agent/ashd-agent
-sudo chown ashd-agent:ashd-agent /home/ashd-agent/ashd-agent
+sudo mkdir -p /home/system-trace-agent/system-trace-agent
+sudo chown system-trace-agent:system-trace-agent /home/system-trace-agent/system-trace-agent
 ```
 
 ### **Step 5: Deploy Agent Code**
 ```bash
 # Copy agent script
-sudo cp agents/rocky/ashd_agent_non_root.py /home/ashd-agent/ashd-agent/ashd_agent.py
-sudo chown ashd-agent:ashd-agent /home/ashd-agent/ashd-agent/ashd_agent.py
-sudo chmod +x /home/ashd-agent/ashd-agent/ashd_agent.py
+sudo cp agents/rocky/system-trace_agent_non_root.py /home/system-trace-agent/system-trace-agent/system-trace_agent.py
+sudo chown system-trace-agent:system-trace-agent /home/system-trace-agent/system-trace-agent/system-trace_agent.py
+sudo chmod +x /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 ```
 
 ### **Step 6: Configure SNMP**
 ```bash
 # Configure SNMP (as root)
 sudo bash -c 'cat > /etc/snmp/snmpd.conf << EOF
-# ASHD SNMP Configuration
+# System Trace SNMP Configuration
 agentAddress udp:161
 com2sec readonly public
 group MyROGroup v2c readonly
@@ -135,30 +135,30 @@ sudo ufw --force enable
 ### **Step 9: Setup Sudo Permissions**
 ```bash
 # Create sudoers file for agent user
-sudo bash -c 'cat > /etc/sudoers.d/ashd-agent << EOF
-# ASHD Agent sudo permissions
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status snmpd
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status chronyd
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status ntp
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/chronyc
-ashd-agent ALL=(ALL) NOPASSWD: /usr/bin/ntpq
-ashd-agent ALL=(ALL) NOPASSWD: /usr/sbin/snmpwalk
+sudo bash -c 'cat > /etc/sudoers.d/system-trace-agent << EOF
+# System Trace Agent sudo permissions
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status snmpd
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status chronyd
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/systemctl status ntp
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/chronyc
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/bin/ntpq
+system-trace-agent ALL=(ALL) NOPASSWD: /usr/sbin/snmpwalk
 EOF'
 ```
 
 ### **Step 10: Create Systemd Service**
 ```bash
-sudo bash -c 'cat > /etc/systemd/system/ashd-agent.service << EOF
+sudo bash -c 'cat > /etc/systemd/system/system-trace-agent.service << EOF
 [Unit]
-Description=ASHD Monitoring Agent (Non-Root)
+Description=System Trace Monitoring Agent (Non-Root)
 After=network.target
 
 [Service]
 Type=simple
-User=ashd-agent
-Group=ashd-agent
-WorkingDirectory=/home/ashd-agent/ashd-agent
-ExecStart=/usr/bin/python3 /home/ashd-agent/ashd-agent/ashd_agent.py
+User=system-trace-agent
+Group=system-trace-agent
+WorkingDirectory=/home/system-trace-agent/system-trace-agent
+ExecStart=/usr/bin/python3 /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -177,8 +177,8 @@ sudo systemctl enable snmpd
 sudo systemctl restart snmpd
 sudo systemctl enable chronyd
 sudo systemctl restart chronyd
-sudo systemctl enable ashd-agent
-sudo systemctl restart ashd-agent
+sudo systemctl enable system-trace-agent
+sudo systemctl restart system-trace-agent
 ```
 
 ## 🔍 Verification
@@ -188,11 +188,11 @@ sudo systemctl restart ashd-agent
 # Check all services
 systemctl status snmpd
 systemctl status chronyd
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Check agent user
-id ashd-agent
-ls -la /home/ashd-agent/
+id system-trace-agent
+ls -la /home/system-trace-agent/
 ```
 
 ### **Test SNMP**
@@ -200,17 +200,17 @@ ls -la /home/ashd-agent/
 # Test SNMP locally
 snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
 
-# Test SNMP from ASHD server
+# Test SNMP from System Trace server
 snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0
 ```
 
 ### **Test Agent**
 ```bash
 # Test agent as non-root user
-sudo -u ashd-agent python3 /home/ashd-agent/ashd-agent/ashd_agent.py
+sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 
 # Check agent logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 ```
 
 ### **Check NTP**
@@ -223,7 +223,7 @@ ntpq -p
 
 ## 🌐 Dashboard Verification
 
-Open ASHD dashboard:
+Open System Trace dashboard:
 ```
 http://localhost:8001
 ```
@@ -232,44 +232,44 @@ http://localhost:8001
 - **SNMP**: OK · 192.168.50.198:161 responding
 - **NTP**: OK · Time synchronized
 - **Agent**: OK · Metrics reporting normally
-- **User**: Shows as "ashd-agent" in metrics
+- **User**: Shows as "system-trace-agent" in metrics
 
 ## 🛠️ Management Commands
 
 ### **Agent Management**
 ```bash
 # Restart agent
-sudo systemctl restart ashd-agent
+sudo systemctl restart system-trace-agent
 
 # Check status
-sudo systemctl status ashd-agent
+sudo systemctl status system-trace-agent
 
 # View logs
-sudo journalctl -u ashd-agent -f
+sudo journalctl -u system-trace-agent -f
 
 # Test agent manually
-sudo -u ashd-agent python3 /home/ashd-agent/ashd-agent/ashd_agent.py
+sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 ```
 
 ### **User Management**
 ```bash
 # Switch to agent user
-sudo -u ashd-agent -i
+sudo -u system-trace-agent -i
 
 # Check user permissions
-sudo -u ashd-agent -l
+sudo -u system-trace-agent -l
 
 # Check home directory
-ls -la /home/ashd-agent/
+ls -la /home/system-trace-agent/
 ```
 
 ### **Service Management**
 ```bash
 # Check all services
-systemctl status snmpd chronyd ashd-agent
+systemctl status snmpd chronyd system-trace-agent
 
 # Restart all services
-sudo systemctl restart snmpd chronyd ashd-agent
+sudo systemctl restart snmpd chronyd system-trace-agent
 ```
 
 ## 🔧 Troubleshooting
@@ -277,25 +277,25 @@ sudo systemctl restart snmpd chronyd ashd-agent
 ### **Permission Issues**
 ```bash
 # Check file permissions
-ls -la /home/ashd-agent/ashd-agent/
+ls -la /home/system-trace-agent/system-trace-agent/
 
 # Fix ownership
-sudo chown -R ashd-agent:ashd-agent /home/ashd-agent/
+sudo chown -R system-trace-agent:system-trace-agent /home/system-trace-agent/
 
 # Check sudo permissions
-sudo -u ashd-agent sudo -l
+sudo -u system-trace-agent sudo -l
 ```
 
 ### **Agent Not Starting**
 ```bash
 # Check agent logs
-sudo journalctl -u ashd-agent -n 50
+sudo journalctl -u system-trace-agent -n 50
 
 # Test agent manually
-sudo -u ashd-agent python3 /home/ashd-agent/ashd-agent/ashd_agent.py
+sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/system-trace_agent.py
 
 # Check Python path
-sudo -u ashd-agent which python3
+sudo -u system-trace-agent which python3
 ```
 
 ### **SNMP Issues**
@@ -358,7 +358,7 @@ chronyc -a makestep
 ## 🚀 **Non-Root Deployment Ready!**
 
 **Status**: ✅ **Non-root deployment scripts created**
-**User**: ashd-agent (dedicated non-root user)
+**User**: system-trace-agent (dedicated non-root user)
 **Security**: Minimal privileges with sudo for specific commands
 **Deployment**: Scripts ready for all OS types
 

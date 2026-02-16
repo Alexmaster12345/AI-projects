@@ -53,33 +53,33 @@
   },
   "agent_files": {
     "ubuntu": {
-      "agent_script": "agents/ubuntu/ashd_agent.py",
+      "agent_script": "agents/ubuntu/system-trace_agent.py",
       "deploy_script": "agents/ubuntu/deploy_ubuntu_agent.sh",
-      "service_file": "agents/ubuntu/ashd-agent.service",
+      "service_file": "agents/ubuntu/system-trace-agent.service",
       "snmp_config": "agents/ubuntu/snmpd.conf"
     },
     "debian": {
-      "agent_script": "agents/debian/ashd_agent.py",
+      "agent_script": "agents/debian/system-trace_agent.py",
       "deploy_script": "agents/debian/deploy_debian_agent.sh",
-      "service_file": "agents/debian/ashd-agent.service",
+      "service_file": "agents/debian/system-trace-agent.service",
       "snmp_config": "agents/debian/snmpd.conf"
     },
     "rhel": {
-      "agent_script": "agents/rhel/ashd_agent.py",
+      "agent_script": "agents/rhel/system-trace_agent.py",
       "deploy_script": "agents/rhel/deploy_rhel_agent.sh",
-      "service_file": "agents/rhel/ashd-agent.service",
+      "service_file": "agents/rhel/system-trace-agent.service",
       "snmp_config": "agents/rhel/snmpd.conf"
     },
     "centos": {
-      "agent_script": "agents/centos/ashd_agent.py",
+      "agent_script": "agents/centos/system-trace_agent.py",
       "deploy_script": "agents/centos/deploy_centos_agent.sh",
-      "service_file": "agents/centos/ashd-agent.service",
+      "service_file": "agents/centos/system-trace-agent.service",
       "snmp_config": "agents/centos/snmpd.conf"
     },
     "rocky": {
-      "agent_script": "agents/rocky/ashd_agent.py",
+      "agent_script": "agents/rocky/system-trace_agent.py",
       "deploy_script": "agents/rocky/deploy_rocky_agent.sh",
-      "service_file": "agents/rocky/ashd-agent.service",
+      "service_file": "agents/rocky/system-trace-agent.service",
       "snmp_config": "agents/rocky/snmpd.conf"
     }
   },

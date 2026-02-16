@@ -1,14 +1,14 @@
 #!/bin/bash
-# User Setup Script for ASHD Agent (Debian)
+# User Setup Script for System Trace Agent (Debian)
 
-AGENT_USER="ashd-agent"
-AGENT_DIR="/home/$AGENT_USER/ashd-agent"
+AGENT_USER="system-trace-agent"
+AGENT_DIR="/home/$AGENT_USER/system-trace-agent"
 
-echo "🔧 Setting up ASHD agent user environment..."
+echo "🔧 Setting up System Trace agent user environment..."
 
 # Create log directory
-sudo mkdir -p /var/log/ashd-agent
-sudo chown $AGENT_USER:$AGENT_USER /var/log/ashd-agent
+sudo mkdir -p /var/log/system-trace-agent
+sudo chown $AGENT_USER:$AGENT_USER /var/log/system-trace-agent
 
 # Create config directory
 mkdir -p "$AGENT_DIR/config"
@@ -33,4 +33,4 @@ EOF
 echo "✅ User environment setup completed"
 echo "Agent directory: $AGENT_DIR"
 echo "Config file: $AGENT_DIR/config/agent.conf"
-echo "Log directory: /var/log/ashd-agent"
+echo "Log directory: /var/log/system-trace-agent"

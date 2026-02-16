@@ -516,7 +516,7 @@
   function loadMapPositions() {
     if (mapPositions) return mapPositions;
     try {
-      const raw = localStorage.getItem('ashd_map_positions');
+      const raw = localStorage.getItem('system-trace_map_positions');
       const parsed = raw ? JSON.parse(raw) : {};
       mapPositions = parsed && typeof parsed === 'object' ? parsed : {};
     } catch (_) {
@@ -527,7 +527,7 @@
 
   function saveMapPositions() {
     try {
-      localStorage.setItem('ashd_map_positions', JSON.stringify(mapPositions || {}));
+      localStorage.setItem('system-trace_map_positions', JSON.stringify(mapPositions || {}));
     } catch (_) {
       // ignore
     }
@@ -609,7 +609,7 @@
     nodes.push({
       kind: 'server',
       id: 'server',
-      name: 'ASHD server',
+      name: 'System Trace server',
       address: '127.0.0.1',
       status: 'unknown',
       x: center.x,
@@ -1008,7 +1008,7 @@
           out.push({
             scope: 'System',
             hostId: null,
-            target: 'ASHD',
+            target: 'System Trace',
             check: sysLabels[key],
             status: s,
             message: msg,
@@ -1173,7 +1173,7 @@
     // leave the UI stuck in a collapsed state with no control to expand.
     document.body.classList.remove('sidebarCollapsed');
     try {
-      localStorage.removeItem('ashd_sidebar_collapsed');
+      localStorage.removeItem('system-trace_sidebar_collapsed');
     } catch (_) {
       // ignore
     }

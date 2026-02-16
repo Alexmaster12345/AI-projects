@@ -186,7 +186,7 @@
     setText(els.notes, h.notes || '—');
 
     try {
-      document.title = `ASHD · ${h.name || 'Host'}`;
+      document.title = `System Trace · ${h.name || 'Host'}`;
     } catch (_) {
       // ignore
     }

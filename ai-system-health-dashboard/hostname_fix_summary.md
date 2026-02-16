@@ -6,7 +6,7 @@ ICMP: CRIT · centos-docker: ping: centos-docker: Name or service not known
 ```
 
 ## Root Cause
-- ASHD configuration was using hostname "centos-docker"
+- System Trace configuration was using hostname "centos-docker"
 - System could not resolve the hostname to IP address
 - ICMP checks were failing with "Name or service not known"
 
@@ -50,7 +50,7 @@ SNMP_HOST=192.168.50.225
 - **Both IP and hostname now work**
 - **No more "Name or service not known" errors**
 
-### **✅ ASHD Server: RELOADED**
+### **✅ System Trace Server: RELOADED**
 - **Configuration**: Automatically updated
 - **Service**: Running with new settings
 - **Monitoring**: Active and functional

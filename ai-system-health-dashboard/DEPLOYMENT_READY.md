@@ -1,4 +1,4 @@
-# 🚀 ASHD Agent Deployment - READY!
+# 🚀 System Trace Agent Deployment - READY!
 
 ## ✅ System Status: Ready for Deployment
 
@@ -37,9 +37,9 @@ python scripts/quick_deploy_agent.py
 ## 📁 Agent Files Created
 
 ### **Rocky Linux Agent (for centos-docker)**
-- ✅ `agents/rocky/ashd_agent.py` - Python monitoring agent
+- ✅ `agents/rocky/system-trace_agent.py` - Python monitoring agent
 - ✅ `agents/rocky/deploy_rocky_agent.sh` - Deployment script
-- ✅ `agents/rocky/ashd-agent.service` - Systemd service
+- ✅ `agents/rocky/system-trace-agent.service` - Systemd service
 - ✅ `agents/rocky/snmpd.conf` - SNMP configuration
 
 ### **Multi-Platform Support**
@@ -88,7 +88,7 @@ ssh-copy-id root@192.168.50.198
 3. **Service Setup**: Configures and starts systemd services
 4. **Firewall Config**: Opens SNMP (161) and NTP (123) ports
 5. **Verification**: Tests services and SNMP connectivity
-6. **Dashboard Integration**: Agent starts reporting to ASHD
+6. **Dashboard Integration**: Agent starts reporting to System Trace
 
 ### **Expected Duration**: 2-5 minutes
 
@@ -96,7 +96,7 @@ ssh-copy-id root@192.168.50.198
 
 ### **Common Issues & Solutions**
 - **SSH Authentication**: Setup SSH keys or use password
-- **Service Failures**: Check logs with `journalctl -u ashd-agent`
+- **Service Failures**: Check logs with `journalctl -u system-trace-agent`
 - **SNMP Issues**: Verify with `snmpwalk -v2c -c public localhost`
 - **Firewall**: Check with `firewall-cmd --list-all`
 
@@ -117,7 +117,7 @@ ssh-copy-id root@192.168.50.198
 ### **Step 2: Verify Deployment**
 ```bash
 # Check agent status
-ssh root@192.168.50.198 'systemctl status ashd-agent'
+ssh root@192.168.50.198 'systemctl status system-trace-agent'
 
 # Test SNMP
 snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0
@@ -175,4 +175,4 @@ NTP: OK · Time synchronized
 
 **The auto-discovery and multi-platform agent deployment system is complete and ready to use!**
 
-Deploy now and start monitoring your hosts with ASHD! 🎯
+Deploy now and start monitoring your hosts with System Trace! 🎯

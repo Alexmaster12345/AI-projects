@@ -1,12 +1,12 @@
 [Unit]
-Description=ASHD Monitoring Agent
+Description=System Trace Monitoring Agent
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/ashd-agent
-ExecStart=/usr/bin/python3 /opt/ashd-agent/ashd_agent.py
+WorkingDirectory=/opt/system-trace-agent
+ExecStart=/usr/bin/python3 /opt/system-trace-agent/system-trace_agent.py
 Restart=always
 RestartSec=10
 StandardOutput=journal

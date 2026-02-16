@@ -20,12 +20,12 @@ Then run these commands on centos-docker:
 dnf update -y && \
 dnf install -y python3 python3-pip net-snmp net-snmp-utils chrony && \
 python3 -m pip install psutil requests && \
-mkdir -p /opt/ashd-agent && \
-cat > /opt/ashd-agent/ashd_agent.py << 'AGENT_EOF'
+mkdir -p /opt/system-trace-agent && \
+cat > /opt/system-trace-agent/system-trace_agent.py << 'AGENT_EOF'
 #!/usr/bin/env python3
 import json, time, socket, psutil, requests, os
 
-class ASHDAgent:
+class System TraceAgent:
     def __init__(self):
         self.server_url = "http://192.168.50.225:8001"
         self.hostname = socket.gethostname()
@@ -64,7 +64,7 @@ class ASHDAgent:
             return False
     
     def run(self):
-        print(f"ASHD Agent starting for {self.hostname}")
+        print(f"System Trace Agent starting for {self.hostname}")
         while True:
             try:
                 metrics = self.get_system_metrics()
@@ -78,10 +78,10 @@ class ASHDAgent:
                 time.sleep(10)
 
 if __name__ == "__main__":
-    ASHDAgent().run()
+    System TraceAgent().run()
 AGENT_EOF
 
-chmod +x /opt/ashd-agent/ashd_agent.py && \
+chmod +x /opt/system-trace-agent/system-trace_agent.py && \
 cat > /etc/snmp/snmpd.conf << 'SNMP_EOF'
 agentAddress udp:161
 com2sec readonly  public
@@ -101,16 +101,16 @@ allow 192.168.0.0/16
 local stratum 10
 NTP_EOF
 
-cat > /etc/systemd/system/ashd-agent.service << 'SERVICE_EOF'
+cat > /etc/systemd/system/system-trace-agent.service << 'SERVICE_EOF'
 [Unit]
-Description=ASHD Monitoring Agent
+Description=System Trace Monitoring Agent
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/ashd-agent
-ExecStart=/usr/bin/python3 /opt/ashd-agent/ashd_agent.py
+WorkingDirectory=/opt/system-trace-agent
+ExecStart=/usr/bin/python3 /opt/system-trace-agent/system-trace_agent.py
 Restart=always
 RestartSec=10
 
@@ -124,11 +124,11 @@ firewall-cmd --reload && \
 systemctl daemon-reload && \
 systemctl enable snmpd && systemctl restart snmpd && \
 systemctl enable chronyd && systemctl restart chronyd && \
-systemctl enable ashd-agent && systemctl restart ashd-agent && \
+systemctl enable system-trace-agent && systemctl restart system-trace-agent && \
 echo "✅ Deployment completed!" && \
 systemctl status snmpd --no-pager -l && \
 systemctl status chronyd --no-pager -l && \
-systemctl status ashd-agent --no-pager -l && \
+systemctl status system-trace-agent --no-pager -l && \
 snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0 && \
 chronyc sources
 ```
@@ -138,7 +138,7 @@ chronyc sources
 After running the commands, exit SSH and test:
 
 ```bash
-# Test SNMP from ASHD server
+# Test SNMP from System Trace server
 snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0
 
 # Check dashboard

@@ -18,7 +18,7 @@ dnf install -y ntp
 # Configure NTP servers
 echo "🔧 Configuring NTP servers..."
 cat > /etc/ntp.conf << 'EOF'
-# NTP Configuration for ASHD
+# NTP Configuration for System Trace
 server 0.pool.ntp.org iburst
 server 1.pool.ntp.org iburst
 server 2.pool.ntp.org iburst

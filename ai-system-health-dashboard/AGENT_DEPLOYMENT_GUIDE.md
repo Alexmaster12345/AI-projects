@@ -1,8 +1,8 @@
-# ASHD Agent Deployment Guide
+# System Trace Agent Deployment Guide
 
 ## 🎯 Overview
 
-This guide provides step-by-step instructions for deploying ASHD monitoring agents to discovered hosts. The system has identified 4 hosts in the 192.168.50.0/24 network and created platform-specific agent packages.
+This guide provides step-by-step instructions for deploying System Trace monitoring agents to discovered hosts. The system has identified 4 hosts in the 192.168.50.0/24 network and created platform-specific agent packages.
 
 ## 📊 Discovered Hosts
 
@@ -36,16 +36,16 @@ If the script fails due to SSH authentication, deploy manually:
 
 ```bash
 # Step 1: Copy agent files
-scp agents/rocky/ashd_agent.py root@192.168.50.198:/opt/ashd-agent/
+scp agents/rocky/system-trace_agent.py root@192.168.50.198:/opt/system-trace-agent/
 scp agents/rocky/deploy_rocky_agent.sh root@192.168.50.198:/tmp/
-scp agents/rocky/ashd-agent.service root@192.168.50.198:/tmp/
+scp agents/rocky/system-trace-agent.service root@192.168.50.198:/tmp/
 scp agents/rocky/snmpd.conf root@192.168.50.198:/tmp/
 
 # Step 2: Execute deployment
 ssh root@192.168.50.198 'chmod +x /tmp/deploy_rocky_agent.sh && /tmp/deploy_rocky_agent.sh'
 
 # Step 3: Verify deployment
-ssh root@192.168.50.198 'systemctl status ashd-agent'
+ssh root@192.168.50.198 'systemctl status system-trace-agent'
 ssh root@192.168.50.198 'snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0'
 ```
 
@@ -84,9 +84,9 @@ If you prefer password authentication, the deployment scripts will prompt for th
 
 ```
 agents/rocky/
-├── ashd_agent.py          # Python monitoring agent
+├── system-trace_agent.py          # Python monitoring agent
 ├── deploy_rocky_agent.sh  # Deployment script
-├── ashd-agent.service     # Systemd service
+├── system-trace-agent.service     # Systemd service
 └── snmpd.conf            # SNMP configuration
 ```
 
@@ -104,7 +104,7 @@ agents/rocky/
 
 ```bash
 # On centos-docker
-ssh root@192.168.50.198 'systemctl status ashd-agent'
+ssh root@192.168.50.198 'systemctl status system-trace-agent'
 ssh root@192.168.50.198 'systemctl status snmpd'
 ssh root@192.168.50.198 'systemctl status chronyd'
 ```
@@ -112,14 +112,14 @@ ssh root@192.168.50.198 'systemctl status chronyd'
 ### **2. Test SNMP Connectivity**
 
 ```bash
-# From ASHD server
+# From System Trace server
 snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0
 
 # From centos-docker
 ssh root@192.168.50.198 'snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0'
 ```
 
-### **3. Check ASHD Dashboard**
+### **3. Check System Trace Dashboard**
 
 ```
 http://localhost:8001
@@ -149,13 +149,13 @@ ssh-copy-id root@192.168.50.198
 
 ```bash
 # Check service status
-ssh root@192.168.50.198 'systemctl status ashd-agent'
+ssh root@192.168.50.198 'systemctl status system-trace-agent'
 
 # Check service logs
-ssh root@192.168.50.198 'journalctl -u ashd-agent -f'
+ssh root@192.168.50.198 'journalctl -u system-trace-agent -f'
 
 # Restart service
-ssh root@192.168.50.198 'systemctl restart ashd-agent'
+ssh root@192.168.50.198 'systemctl restart system-trace-agent'
 ```
 
 ### **SNMP Issues**
@@ -206,7 +206,7 @@ ICMP: OK · 192.168.50.198 responding
 
 ### **Dashboard Verification**
 
-On the ASHD dashboard (http://localhost:8001):
+On the System Trace dashboard (http://localhost:8001):
 
 1. **Configuration Page**: 
    - SNMP_HOST: 192.168.50.198
@@ -232,7 +232,7 @@ On the ASHD dashboard (http://localhost:8001):
 
 2. **Verify deployment**:
    ```bash
-   ssh root@192.168.50.198 'systemctl status ashd-agent'
+   ssh root@192.168.50.198 'systemctl status system-trace-agent'
    snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0
    ```
 

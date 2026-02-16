@@ -56,7 +56,7 @@ sudo ./fix_ntp_centos_docker.sh
 - Forces immediate time synchronization
 - Verifies NTP status
 
-### Step 3: Deploy ASHD Agent
+### Step 3: Deploy System Trace Agent
 
 Still on centos-docker:
 
@@ -70,7 +70,7 @@ sudo ./deploy_centos_docker_agent.sh
 - Configures SNMP service with public community
 - Enables and starts SNMP daemon
 - Opens firewall for SNMP (UDP/161)
-- Creates ASHD monitoring agent
+- Creates System Trace monitoring agent
 - Sets up systemd service for agent
 - Tests SNMP connectivity
 
@@ -85,8 +85,8 @@ systemctl status snmpd
 # Check NTP service
 systemctl status ntpd
 
-# Check ASHD agent
-systemctl status ashd-agent
+# Check System Trace agent
+systemctl status system-trace-agent
 
 # Test SNMP locally
 snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
@@ -95,12 +95,12 @@ snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
 ntpq -p
 
 # Check agent logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 ```
 
-### Step 5: Update ASHD Dashboard
+### Step 5: Update System Trace Dashboard
 
-The ASHD server should automatically reload with the new configuration. Check:
+The System Trace server should automatically reload with the new configuration. Check:
 
 1. **Dashboard**: http://localhost:8001
 2. **Configuration Page**: Verify SNMP settings
@@ -187,13 +187,13 @@ firewall-cmd --list-all | grep ntp
 #### **Agent not reporting**
 ```bash
 # Check agent service
-systemctl status ashd-agent
+systemctl status system-trace-agent
 
 # Check agent logs
-journalctl -u ashd-agent -f
+journalctl -u system-trace-agent -f
 
 # Test agent manually
-/opt/ashd-agent/ashd_agent.py
+/opt/system-trace-agent/system-trace_agent.py
 
 # Check Python dependencies
 python3 -c "import psutil; print('psutil OK')"
@@ -202,13 +202,13 @@ python3 -c "import psutil; print('psutil OK')"
 #### **Fix agent issues**
 ```bash
 # Restart agent service
-sudo systemctl restart ashd-agent
+sudo systemctl restart system-trace-agent
 
 # Install missing dependencies
 sudo pip3 install psutil
 
 # Check agent configuration
-cat /etc/systemd/system/ashd-agent.service
+cat /etc/systemd/system/system-trace-agent.service
 ```
 
 ## Monitoring Dashboard
@@ -246,7 +246,7 @@ sudo nano /etc/snmp/snmpd.conf
 
 sudo systemctl restart snmpd
 
-# Update ASHD .env
+# Update System Trace .env
 SNMP_COMMUNITY=your_community
 ```
 
@@ -268,10 +268,10 @@ Modify the agent script to collect additional metrics:
 
 ```bash
 # On centos-docker
-sudo nano /opt/ashd-agent/ashd_agent.py
+sudo nano /opt/system-trace-agent/system-trace_agent.py
 # Add custom metrics to get_system_metrics() function
 
-sudo systemctl restart ashd-agent
+sudo systemctl restart system-trace-agent
 ```
 
 ## Security Considerations
@@ -315,7 +315,7 @@ sudo systemctl restart ashd-agent
 - **Firewall blocks**: Verify port accessibility
 
 ### **Getting Help**
-1. Check ASHD dashboard for real-time status
+1. Check System Trace dashboard for real-time status
 2. Review system logs on centos-docker
 3. Test connectivity manually
 4. Consult this guide for troubleshooting steps

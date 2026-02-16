@@ -1,9 +1,9 @@
 #!/bin/bash
-# ASHD Agent Deployment for CentOS-Docker
+# System Trace Agent Deployment for CentOS-Docker
 
 set -e
 
-echo "🐧 Deploying ASHD Agent on CentOS-Docker..."
+echo "🐧 Deploying System Trace Agent on CentOS-Docker..."
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
@@ -19,7 +19,7 @@ dnf install -y python3 python3-pip net-snmp net-snmp-utils
 # Configure SNMP service
 echo "🔧 Configuring SNMP service..."
 cat > /etc/snmp/snmpd.conf << 'EOF'
-# SNMP Configuration for ASHD Monitoring
+# SNMP Configuration for System Trace Monitoring
 rocommunity public
 syslocation "Data Center"
 syscontact "admin@example.com"
@@ -37,13 +37,13 @@ echo "🔥 Configuring firewall..."
 firewall-cmd --permanent --add-service=snmp
 firewall-cmd --reload
 
-# Create ASHD agent directory
+# Create System Trace agent directory
 echo "📁 Creating agent directory..."
-mkdir -p /opt/ashd-agent
-cd /opt/ashd-agent
+mkdir -p /opt/system-trace-agent
+cd /opt/system-trace-agent
 
 # Create simple agent script
-cat > ashd_agent.py << 'EOF'
+cat > system-trace_agent.py << 'EOF'
 #!/usr/bin/env python3
 import subprocess
 import json
@@ -64,7 +64,7 @@ def get_system_metrics():
     return metrics
 
 def main():
-    print("🤖 ASHD Agent starting...")
+    print("🤖 System Trace Agent starting...")
     
     while True:
         try:
@@ -82,19 +82,19 @@ if __name__ == "__main__":
     main()
 EOF
 
-chmod +x ashd_agent.py
+chmod +x system-trace_agent.py
 
 # Create systemd service for agent
-cat > /etc/systemd/system/ashd-agent.service << 'EOF'
+cat > /etc/systemd/system/system-trace-agent.service << 'EOF'
 [Unit]
-Description=ASHD Monitoring Agent
+Description=System Trace Monitoring Agent
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/ashd-agent
-ExecStart=/usr/bin/python3 /opt/ashd-agent/ashd_agent.py
+WorkingDirectory=/opt/system-trace-agent
+ExecStart=/usr/bin/python3 /opt/system-trace-agent/system-trace_agent.py
 Restart=always
 RestartSec=10
 
@@ -103,17 +103,17 @@ WantedBy=multi-user.target
 EOF
 
 # Enable and start agent service
-echo "🚀 Starting ASHD agent..."
+echo "🚀 Starting System Trace agent..."
 systemctl daemon-reload
-systemctl enable ashd-agent
-systemctl start ashd-agent
-systemctl status ashd-agent
+systemctl enable system-trace-agent
+systemctl start system-trace-agent
+systemctl status system-trace-agent
 
 # Test SNMP
 echo "🧪 Testing SNMP..."
 snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0
 
-echo "✅ ASHD Agent deployment complete!"
-echo "📊 Agent metrics: /opt/ashd-agent/ashd_agent.py"
+echo "✅ System Trace Agent deployment complete!"
+echo "📊 Agent metrics: /opt/system-trace-agent/system-trace_agent.py"
 echo "🔧 SNMP service: systemctl status snmpd"
-echo "🤖 Agent service: systemctl status ashd-agent"
+echo "🤖 Agent service: systemctl status system-trace-agent"

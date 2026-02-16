@@ -1,7 +1,7 @@
 #!/bin/bash
-# Quick ASHD Agent Deployment Script
+# Quick System Trace Agent Deployment Script
 
-echo "🚀 ASHD Agent Deployment"
+echo "🚀 System Trace Agent Deployment"
 echo "======================="
 echo ""
 echo "Available deployment options:"
@@ -40,16 +40,16 @@ case $choice in
         echo "=============================================="
         echo ""
         echo "# Step 1: Copy agent files"
-        echo "scp agents/rocky/ashd_agent.py root@192.168.50.198:/opt/ashd-agent/"
+        echo "scp agents/rocky/system-trace_agent.py root@192.168.50.198:/opt/system-trace-agent/"
         echo "scp agents/rocky/deploy_rocky_agent.sh root@192.168.50.198:/tmp/"
-        echo "scp agents/rocky/ashd-agent.service root@192.168.50.198:/tmp/"
+        echo "scp agents/rocky/system-trace-agent.service root@192.168.50.198:/tmp/"
         echo "scp agents/rocky/snmpd.conf root@192.168.50.198:/tmp/"
         echo ""
         echo "# Step 2: Execute deployment"
         echo "ssh root@192.168.50.198 'chmod +x /tmp/deploy_rocky_agent.sh && /tmp/deploy_rocky_agent.sh'"
         echo ""
         echo "# Step 3: Verify deployment"
-        echo "ssh root@192.168.50.198 'systemctl status ashd-agent'"
+        echo "ssh root@192.168.50.198 'systemctl status system-trace-agent'"
         echo "snmpwalk -v2c -c public 192.168.50.198 1.3.6.1.2.1.1.1.0"
         echo ""
         echo "# Step 4: Check dashboard"
