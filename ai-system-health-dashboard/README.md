@@ -47,9 +47,6 @@ Real-time infrastructure monitoring dashboard with agent-based metrics, host mon
 ### Configuration
 ![Configuration](docs/screenshots/08_configuration.png)
 
-### Hosts Management
-![Hosts Management](docs/screenshots/09_hosts_mgmt.png)
-
 ### System Logs
 ![System Logs](docs/screenshots/10_system_logs.png)
 
