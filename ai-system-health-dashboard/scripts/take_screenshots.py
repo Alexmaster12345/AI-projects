@@ -104,10 +104,24 @@ def main() -> int:
         page.wait_for_timeout(700)
         _shot(page, out_dir / "08_configuration.png")
 
-        # Optional: host details (if any hosts exist)
+        # Hosts management page
+        page.goto(f"{base_url}/hosts", wait_until="domcontentloaded")
+        page.wait_for_timeout(900)
+        _shot(page, out_dir / "09_hosts_mgmt.png")
+
+        # System Logs page
+        page.goto(f"{base_url}/logs", wait_until="domcontentloaded")
+        page.wait_for_timeout(900)
+        _shot(page, out_dir / "10_system_logs.png")
+
+        # Users page
+        page.goto(f"{base_url}/users", wait_until="domcontentloaded")
+        page.wait_for_timeout(700)
+        _shot(page, out_dir / "11_users.png")
+
+        # Optional: host monitor (if any hosts exist)
         host_id: Optional[int] = None
         try:
-            # Use the authenticated API via Playwright request.
             resp = context.request.get(f"{base_url}/api/hosts")
             if resp.ok:
                 data = resp.json()
@@ -119,9 +133,9 @@ def main() -> int:
             host_id = None
 
         if host_id is not None:
-            page.goto(f"{base_url}/host/{host_id}", wait_until="domcontentloaded")
-            page.wait_for_timeout(700)
-            _shot(page, out_dir / "09_host_details.png")
+            page.goto(f"{base_url}/host?id={host_id}", wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
+            _shot(page, out_dir / "12_host_monitor.png")
 
         context.close()
         browser.close()

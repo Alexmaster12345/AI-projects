@@ -21,6 +21,44 @@ Real-time infrastructure monitoring dashboard with agent-based metrics, host mon
 | User Management | `/users` | User accounts |
 | User Groups | `/user-groups` | Group-based access control |
 
+## Screenshots
+
+### Login
+![Login](docs/screenshots/01_login.png)
+
+### Dashboard
+![Dashboard](docs/screenshots/02_dashboard.png)
+
+### Problems
+![Problems](docs/screenshots/03_problems.png)
+
+### Hosts
+![Hosts](docs/screenshots/04_hosts.png)
+
+### Maps
+![Maps](docs/screenshots/05_maps.png)
+
+### Inventory
+![Inventory](docs/screenshots/06_inventory.png)
+
+### Overview
+![Overview](docs/screenshots/07_overview.png)
+
+### Configuration
+![Configuration](docs/screenshots/08_configuration.png)
+
+### Hosts Management
+![Hosts Management](docs/screenshots/09_hosts_mgmt.png)
+
+### System Logs
+![System Logs](docs/screenshots/10_system_logs.png)
+
+### Users
+![Users](docs/screenshots/11_users.png)
+
+### Host Monitor
+![Host Monitor](docs/screenshots/12_host_monitor.png)
+
 ## Key Features
 
 ### Host Monitor (`/host?id=<id>`)
