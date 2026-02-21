@@ -33,7 +33,7 @@ Real-time infrastructure monitoring dashboard with agent-based metrics, host mon
 ![Problems](docs/screenshots/03_problems.png)
 
 ### Hosts
-![Hosts](docs/screenshots/04_hosts.png)
+![Hosts](docs/screenshots/04_hosts_v2.png)
 
 ### Maps
 ![Maps](docs/screenshots/05_maps.png)
