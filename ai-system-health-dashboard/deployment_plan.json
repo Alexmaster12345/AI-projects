@@ -1,14 +1,24 @@
 {
-  "timestamp": "2026-02-16 22:52:23",
+  "timestamp": "2026-02-21 21:22:44",
   "discovery_results": {
-    "timestamp": "2026-02-16 22:52:19",
+    "timestamp": "2026-02-21 21:22:40",
     "network_ranges": [
       "192.168.50.0/24"
     ],
-    "total_hosts_found": 4,
+    "total_hosts_found": 5,
     "hosts_by_os": {},
     "deployable_hosts": [],
     "all_hosts": [
+      {
+        "ip": "192.168.50.1",
+        "hostname": null,
+        "os_type": "unknown",
+        "os_version": null,
+        "package_manager": null,
+        "snmp_available": false,
+        "ssh_accessible": false,
+        "agent_deployable": false
+      },
       {
         "ip": "192.168.50.81",
         "hostname": null,
@@ -20,7 +30,7 @@
         "agent_deployable": false
       },
       {
-        "ip": "192.168.50.89",
+        "ip": "192.168.50.107",
         "hostname": null,
         "os_type": "unknown",
         "os_version": null,
@@ -30,7 +40,7 @@
         "agent_deployable": false
       },
       {
-        "ip": "192.168.50.1",
+        "ip": "192.168.50.89",
         "hostname": null,
         "os_type": "unknown",
         "os_version": null,
@@ -53,33 +63,33 @@
   },
   "agent_files": {
     "ubuntu": {
-      "agent_script": "agents/ubuntu/system-trace_agent.py",
+      "agent_script": "agents/ubuntu/ashd_agent.py",
       "deploy_script": "agents/ubuntu/deploy_ubuntu_agent.sh",
-      "service_file": "agents/ubuntu/system-trace-agent.service",
+      "service_file": "agents/ubuntu/ashd-agent.service",
       "snmp_config": "agents/ubuntu/snmpd.conf"
     },
     "debian": {
-      "agent_script": "agents/debian/system-trace_agent.py",
+      "agent_script": "agents/debian/ashd_agent.py",
       "deploy_script": "agents/debian/deploy_debian_agent.sh",
-      "service_file": "agents/debian/system-trace-agent.service",
+      "service_file": "agents/debian/ashd-agent.service",
       "snmp_config": "agents/debian/snmpd.conf"
     },
     "rhel": {
-      "agent_script": "agents/rhel/system-trace_agent.py",
+      "agent_script": "agents/rhel/ashd_agent.py",
       "deploy_script": "agents/rhel/deploy_rhel_agent.sh",
-      "service_file": "agents/rhel/system-trace-agent.service",
+      "service_file": "agents/rhel/ashd-agent.service",
       "snmp_config": "agents/rhel/snmpd.conf"
     },
     "centos": {
-      "agent_script": "agents/centos/system-trace_agent.py",
+      "agent_script": "agents/centos/ashd_agent.py",
       "deploy_script": "agents/centos/deploy_centos_agent.sh",
-      "service_file": "agents/centos/system-trace-agent.service",
+      "service_file": "agents/centos/ashd-agent.service",
       "snmp_config": "agents/centos/snmpd.conf"
     },
     "rocky": {
-      "agent_script": "agents/rocky/system-trace_agent.py",
+      "agent_script": "agents/rocky/ashd_agent.py",
       "deploy_script": "agents/rocky/deploy_rocky_agent.sh",
-      "service_file": "agents/rocky/system-trace-agent.service",
+      "service_file": "agents/rocky/ashd-agent.service",
       "snmp_config": "agents/rocky/snmpd.conf"
     }
   },

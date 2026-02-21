@@ -16,10 +16,55 @@ from pathlib import Path
 class NonRootASHDAgent:
     def __init__(self):
         self.server_url = "http://192.168.50.225:8001"
-        self.hostname = socket.gethostname()
+        self.hostname = self.get_hostname()
         self.agent_id = f"{self.hostname}-{int(time.time())}"
         self.metrics_interval = 30
         self.user = pwd.getpwuid(os.getuid()).pw_name
+    
+    def get_hostname(self):
+        """Get hostname with fallback methods for auto-discovery."""
+        try:
+            # Method 1: socket.gethostname() - most reliable
+            hostname = socket.gethostname()
+            if hostname and hostname != 'localhost' and hostname != 'localhost.localdomain':
+                return hostname
+        except:
+            pass
+        
+        try:
+            # Method 2: platform.node() - alternative method
+            import platform
+            hostname = platform.node()
+            if hostname and hostname != 'localhost' and hostname != 'localhost.localdomain':
+                return hostname
+        except:
+            pass
+        
+        try:
+            # Method 3: Read from /etc/hostname (Linux specific)
+            with open('/etc/hostname', 'r') as f:
+                hostname = f.read().strip()
+                if hostname and hostname != 'localhost' and hostname != 'localhost.localdomain':
+                    return hostname
+        except:
+            pass
+        
+        try:
+            # Method 4: Use hostname command
+            result = subprocess.run(['hostname'], capture_output=True, text=True, timeout=5)
+            hostname = result.stdout.strip()
+            if hostname and hostname != 'localhost' and hostname != 'localhost.localdomain':
+                return hostname
+        except:
+            pass
+        
+        # Fallback: generate a unique identifier
+        try:
+            import uuid
+            mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) for elements in range(0,2*6,2)][::-1])
+            return f"agent-{mac[:8]}"
+        except:
+            return f"agent-{int(time.time())}"
         
     def run_command_with_sudo(self, command):
         """Run command with sudo if needed."""

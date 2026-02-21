@@ -4,11 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>System Trace · Host Monitor</title>
-    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260207_8" />
-    <link rel="stylesheet" href="/static/assets/host.css?v=20260207_8" />
-    <script defer src="/static/assets/host.js?v=20260207_9"></script>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260221_3" />
+    <link rel="stylesheet" href="/static/assets/host.css?v=20260221_5" />
+    <link rel="stylesheet" href="/static/assets/logs.css?v=20260221_1" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script defer src="/static/assets/host.js?v=20260221_7"></script>
   </head>
-  <body>
+  <body class="sidebarAutoHide">
     <div class="appShell">
       <aside class="sidebar" id="sidebar" aria-label="Navigation">
         <div class="sideTop">
@@ -36,95 +38,232 @@
 
           <div class="sideGroup">
             <div class="sideGroupTitle">Administration</div>
-            <form class="sideLogout" method="post" action="/logout">
-              <button class="sideItem sideBtn" type="submit">Sign out</button>
-            </form>
+            <a class="sideItem" href="/logs" data-label="System Logs">System Logs</a>
+            <a class="sideItem" href="/users" data-action="users" data-label="Users">Users</a>
+            <a class="sideItem" href="/user-groups" data-action="user-groups" data-label="User groups">User groups</a>
           </div>
         </nav>
+
+        <div class="sideBottom" aria-label="Secondary">
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit">Sign out</button>
+          </form>
+        </div>
       </aside>
 
       <div class="content">
-        <div class="hostWrap">
-          <header class="hostHeader">
-            <div>
-              <div class="hostTitle">Host monitor</div>
-              <div class="hostSub muted">Live reachability status (ICMP) and inventory details.</div>
+        <div class="hmWrap" id="hmWrap">
+
+          <!-- Page header (id=hmWrap used by JS for blink class) -->
+          <header class="hmHeader">
+            <div class="hmHeaderLeft">
+              <a class="hmBack" href="/#hosts">← Hosts</a>
+              <div>
+                <div class="hmTitle" id="hName">Loading…</div>
+                <div class="hmSub"><span id="hAddr">—</span> &bull; <span id="hType">—</span> &bull; <span id="hOsType" class="muted">—</span></div>
+              </div>
             </div>
-            <div class="hostBadge">
-              <span class="dot"></span>
-              <span id="hostConn">loading…</span>
-              <span class="sep">·</span>
-              <span class="muted" id="hostUser">—</span>
+            <div class="hmHeaderRight">
+              <div class="hmAgentBadge" id="hmAgentBadge">—</div>
+              <div class="hmConnBadge"><span class="dot"></span><span id="hostConn">loading…</span></div>
+              <span class="muted" style="font-size:11px;" id="hostUser">—</span>
             </div>
           </header>
 
           <div id="hostErr" class="hostsErr" role="alert" style="display:none;"></div>
 
-          <div class="hostGrid">
+          <!-- Problem / error panel (shown only when issues detected) -->
+          <div class="hmErrPanel" id="hmErrPanel" style="display:none;">
+            <div class="hmErrPanelHeader">
+              <div class="hmErrPanelTitle">
+                <span class="hmErrBlink"></span>
+                <span id="hmErrPanelTitle">Active Problems</span>
+              </div>
+              <a class="hmErrPanelLink" href="/logs" id="hmErrLogsLink">View all in System Logs →</a>
+            </div>
+            <div class="hmErrList" id="hmErrList"></div>
+          </div>
+
+          <!-- Live stat tiles -->
+          <div class="hmTiles" id="hmTiles">
+            <div class="hmTile"><div class="hmTileLabel">CPU</div><div class="hmTileVal" id="tCpu">—</div></div>
+            <div class="hmTile"><div class="hmTileLabel">RAM</div><div class="hmTileVal" id="tMem">—</div></div>
+            <div class="hmTile"><div class="hmTileLabel">Disk</div><div class="hmTileVal" id="tDisk">—</div></div>
+            <div class="hmTile"><div class="hmTileLabel">Net ↑</div><div class="hmTileVal" id="tNetSent">—</div></div>
+            <div class="hmTile"><div class="hmTileLabel">Net ↓</div><div class="hmTileVal" id="tNetRecv">—</div></div>
+            <div class="hmTile"><div class="hmTileLabel">Uptime</div><div class="hmTileVal" id="tUptime">—</div></div>
+            <div class="hmTile"><div class="hmTileLabel">Processes</div><div class="hmTileVal" id="tProcs">—</div></div>
+            <div class="hmTile" id="tGpuTile" style="display:none;"><div class="hmTileLabel">GPU</div><div class="hmTileVal" id="tGpu">—</div></div>
+          </div>
+
+          <!-- Charts grid -->
+          <div class="hmChartsGrid" id="hmChartsGrid">
+            <div class="hmChartCard">
+              <div class="hmChartTitle">CPU Usage %</div>
+              <div class="hmChartWrap"><canvas id="chartCpu"></canvas></div>
+            </div>
+            <div class="hmChartCard">
+              <div class="hmChartTitle">RAM Usage %</div>
+              <div class="hmChartWrap"><canvas id="chartMem"></canvas></div>
+            </div>
+            <div class="hmChartCard">
+              <div class="hmChartTitle">Disk Usage %</div>
+              <div class="hmChartWrap"><canvas id="chartDisk"></canvas></div>
+            </div>
+            <div class="hmChartCard hmChartWide">
+              <div class="hmChartTitle">Network Throughput (bytes/s)</div>
+              <div class="hmChartWrap"><canvas id="chartNet"></canvas></div>
+            </div>
+            <div class="hmChartCard" id="chartGpuCard" style="display:none;">
+              <div class="hmChartTitle">GPU Usage %</div>
+              <div class="hmChartWrap"><canvas id="chartGpu"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Bottom grid: protocols + identity -->
+          <div class="hmBottomGrid">
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Protocol Checks</div>
+              <div class="hmProtoList">
+                <div class="hmProtoRow"><span class="hmProtoName">ICMP</span><span class="hmProtoDesc muted">Reachability / latency</span><span class="hmProtoVal" id="pIcmp">—</span></div>
+                <div class="hmProtoRow"><span class="hmProtoName">SSH</span><span class="hmProtoDesc muted">tcp/22 connectivity</span><span class="hmProtoVal" id="pSsh">—</span></div>
+                <div class="hmProtoRow"><span class="hmProtoName">SNMP</span><span class="hmProtoDesc muted">udp/161 agent</span><span class="hmProtoVal" id="pSnmp">—</span></div>
+                <div class="hmProtoRow"><span class="hmProtoName">NTP</span><span class="hmProtoDesc muted">udp/123 time sync</span><span class="hmProtoVal" id="pNtp">—</span></div>
+                <div class="hmProtoRow"><span class="hmProtoName">DNS</span><span class="hmProtoDesc muted">Name resolution</span><span class="hmProtoVal" id="pDns">—</span></div>
+              </div>
+            </section>
+
             <section class="hostsCard">
               <div class="hostsCardTitle">Identity</div>
               <div class="cfgKv">
-                <div class="cfgKvRow"><span class="k">Name</span>: <span id="hName" class="v">—</span></div>
-                <div class="cfgKvRow"><span class="k">Address</span>: <span id="hAddr" class="v">—</span></div>
-                <div class="cfgKvRow"><span class="k">Type</span>: <span id="hType" class="v">—</span></div>
-                <div class="cfgKvRow"><span class="k">Tags</span>: <span id="hTags" class="v">—</span></div>
-                <div class="cfgKvRow"><span class="k">Active</span>: <span id="hActive" class="v">—</span></div>
-                <div class="cfgKvRow"><span class="k">Created</span>: <span id="hCreated" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Hostname: </span><span id="hNameKv" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Address: </span><span id="hAddrKv" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Type: </span><span id="hTypeKv" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Tags: </span><span id="hTags" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Agent ID: </span><span id="hAgentId" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Last seen: </span><span id="hLastSeen" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Created: </span><span id="hCreated" class="v">—</span></div>
               </div>
             </section>
 
             <section class="hostsCard">
-              <div class="hostsCardTitle">Status</div>
+              <div class="hostsCardTitle">Reachability</div>
               <div class="cfgKv">
-                <div class="cfgKvRow"><span class="k">Reachability</span>: <span id="hStatus" class="v">—</span></div>
-                <div class="cfgKvRow"><span class="k">Latency</span>: <span id="hLatency" class="v">—</span></div>
-                <div class="cfgKvRow"><span class="k">Last check</span>: <span id="hChecked" class="v">—</span></div>
-                <div class="cfgKvRow"><span class="k">Message</span>: <span id="hMsg" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Status: </span><span id="hStatus" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Latency: </span><span id="hLatency" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Last check: </span><span id="hChecked" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Message: </span><span id="hMsg" class="v">—</span></div>
               </div>
-              <div class="hostActions">
-                <a class="btn" href="/#hosts">Back to Hosts</a>
-              </div>
-            </section>
-
-            <section class="hostsCard hostWide">
-              <div class="hostsCardTitle">Monitoring protocols</div>
-              <div class="hostProtoHelp muted">What to watch for (best-effort checks; some require services enabled on the host).</div>
-              <div class="hostProtoGrid">
-                <div class="hostProtoRow">
-                  <div class="pName">ICMP</div>
-                  <div class="pWhat">Packet loss / reachability</div>
-                  <div class="pMetric" id="pIcmp">—</div>
-                </div>
-                <div class="hostProtoRow">
-                  <div class="pName">SSH</div>
-                  <div class="pWhat">Connection failures (tcp/22)</div>
-                  <div class="pMetric" id="pSsh">—</div>
-                </div>
-                <div class="hostProtoRow">
-                  <div class="pName">SNMP</div>
-                  <div class="pWhat">High resource usage (agent reachability)</div>
-                  <div class="pMetric" id="pSnmp">—</div>
-                </div>
-                <div class="hostProtoRow">
-                  <div class="pName">NTP</div>
-                  <div class="pWhat">Clock skew / NTP server reachability (udp/123)</div>
-                  <div class="pMetric" id="pNtp">—</div>
-                </div>
-                <div class="hostProtoRow">
-                  <div class="pName">DNS</div>
-                  <div class="pWhat">Resolution errors</div>
-                  <div class="pMetric" id="pDns">—</div>
-                </div>
+              <div style="margin-top:14px;">
+                <a class="hostsBtnSmall" href="/#hosts">← Back to Hosts</a>
               </div>
             </section>
 
-            <section class="hostsCard hostWide">
+            <section class="hostsCard" id="hNotesCard">
               <div class="hostsCardTitle">Notes</div>
               <div id="hNotes" class="hostNotes muted">—</div>
             </section>
+
+          </div><!-- hmBottomGrid -->
+
+          <div class="hmNoAgent" id="hmNoAgent" style="display:none;">
+            <div class="hmNoAgentIcon">📡</div>
+            <div class="hmNoAgentTitle">No agent data available</div>
+            <div class="hmNoAgentSub">Install the monitoring agent on this host to see CPU, RAM, Disk and Network charts.</div>
+            <a class="btn" href="/#hosts">Go to Hosts → Install Agent</a>
           </div>
-        </div>
+
+        </div><!-- hmWrap -->
       </div>
     </div>
+
+    <style>
+    /* Force auto-hide behavior for this page */
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar {
+      transform: translateX(calc(-100% + 14px)) !important;
+      transition: transform 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide.sidebarHover .sidebar,
+    body.sidebarAutoHide.sidebarOpen .sidebar {
+      transform: translateX(0) !important;
+      transition: transform 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(110, 231, 255, 0.1), transparent);
+      border-right: 1px solid rgba(110, 231, 255, 0.2);
+      pointer-events: none;
+    }
+    
+    /* Ensure content adjusts properly */
+    body.sidebarAutoHide .content {
+      margin-left: 14px !important;
+      transition: margin-left 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide.sidebarHover .content,
+    body.sidebarAutoHide.sidebarOpen .content {
+      margin-left: var(--side-w, 260px) !important;
+    }
+  </style>
+    <script>
+      // Simple auto-hide sidebar implementation
+      (function() {
+        let sidebarHover = false;
+        let mouseTimer = null;
+        
+        function initAutoHide() {
+          const sidebar = document.getElementById('sidebar');
+          if (!sidebar) return;
+          
+          // Force the auto-hide class
+          document.body.classList.add('sidebarAutoHide');
+          
+          // Mouse move handler
+          function onMouseMove(e) {
+            clearTimeout(mouseTimer);
+            const x = e.clientX;
+            
+            if (x <= 30) {
+              if (!sidebarHover) {
+                sidebarHover = true;
+                document.body.classList.add('sidebarHover');
+              }
+            } else if (x > 100) {
+              if (sidebarHover) {
+                sidebarHover = false;
+                document.body.classList.remove('sidebarHover');
+              }
+            }
+          }
+          
+          // Add event listener
+          document.addEventListener('mousemove', onMouseMove, { passive: true });
+          
+          // Sidebar hover handlers
+          sidebar.addEventListener('mouseenter', function() {
+            sidebarHover = true;
+            document.body.classList.add('sidebarHover');
+          });
+          
+          sidebar.addEventListener('mouseleave', function() {
+            sidebarHover = false;
+            document.body.classList.remove('sidebarHover');
+          });
+        }
+        
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initAutoHide);
+        } else {
+          initAutoHide();
+        }
+      })();
+    </script>
   </body>
 </html>

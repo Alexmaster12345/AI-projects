@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Trace · System Logs</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260221_3" />
+    <link rel="stylesheet" href="/static/assets/logs.css?v=20260221_1" />
+    <script defer src="/static/assets/logs.js?v=20260221_1"></script>
+  </head>
+  <body class="sidebarAutoHide">
+    <div class="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow"><div class="brand">System Trace</div></div>
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/#dashboard" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="/#problems" data-label="Problems">Problems</a>
+            <a class="sideItem" href="/#hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/#overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="/#screens" data-label="Screens">Screens</a>
+            <a class="sideItem" href="/#maps" data-label="Maps">Maps</a>
+          </div>
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Inventory</div>
+            <a class="sideItem" href="/inventory" data-label="Inventory">Inventory</a>
+          </div>
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Reports</div>
+            <a class="sideItem" href="/#reports" data-label="Reports">Reports</a>
+          </div>
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Configuration</div>
+            <a class="sideItem" href="/#configuration" data-label="Configuration">Configuration</a>
+          </div>
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <a class="sideItem active" href="/logs" data-label="System Logs">System Logs</a>
+            <a class="sideItem" href="/users" data-label="Users">Users</a>
+            <a class="sideItem" href="/user-groups" data-label="User groups">User groups</a>
+          </div>
+        </nav>
+        <div class="sideBottom">
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit">Sign out</button>
+          </form>
+        </div>
+      </aside>
+
+      <main class="mainContent" id="mainContent">
+        <div class="logsWrap">
+          <header class="logsHeader">
+            <div class="logsHeaderLeft">
+              <a class="logsBack" href="/">← Dashboard</a>
+              <div>
+                <div class="logsTitle">System Logs</div>
+                <div class="logsSub muted">Real-time event and problem log</div>
+              </div>
+            </div>
+            <div class="logsHeaderRight">
+              <select id="logsLevelFilter" class="logsSelect">
+                <option value="">All levels</option>
+                <option value="crit">Critical</option>
+                <option value="warn">Warning</option>
+                <option value="info">Info</option>
+              </select>
+              <input id="logsHostFilter" class="logsInput" placeholder="Filter by host…" autocomplete="off" />
+              <button id="logsClearBtn" class="logsBtnDanger">Clear all</button>
+              <button id="logsRefreshBtn" class="logsBtn">↻ Refresh</button>
+              <span class="logsConnBadge"><span class="dot"></span><span id="logsConn">loading…</span></span>
+            </div>
+          </header>
+
+          <div id="logsErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+          <!-- Summary bar -->
+          <div class="logsSummary">
+            <div class="logsSumTile crit"><span id="sumCrit">0</span><span class="logsSumLabel">Critical</span></div>
+            <div class="logsSumTile warn"><span id="sumWarn">0</span><span class="logsSumLabel">Warning</span></div>
+            <div class="logsSumTile info"><span id="sumInfo">0</span><span class="logsSumLabel">Info</span></div>
+            <div class="logsSumTile total"><span id="sumTotal">0</span><span class="logsSumLabel">Total</span></div>
+          </div>
+
+          <!-- Log table -->
+          <div class="logsTableWrap">
+            <table class="logsTable">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Level</th>
+                  <th>Host</th>
+                  <th>IP</th>
+                  <th>Source</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody id="logsTbody">
+                <tr><td colspan="6" class="logsEmpty muted">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // Sidebar auto-hide
+      (function() {
+        const s = document.getElementById('sidebar');
+        const m = document.getElementById('mainContent');
+        if (!s || !m) return;
+        function check() {
+          if (window.innerWidth < 900) { s.style.display = 'none'; m.style.marginLeft = '0'; }
+          else { s.style.display = ''; m.style.marginLeft = ''; }
+        }
+        check();
+        window.addEventListener('resize', check);
+      })();
+    </script>
+  </body>
+</html>

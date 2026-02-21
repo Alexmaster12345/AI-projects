@@ -1,23 +1,63 @@
-# AI-Powered System Trace Dashboard
+# System Trace Dashboard
 
-Local, real-time system trace monitoring dashboard.
+Real-time infrastructure monitoring dashboard with agent-based metrics, host monitoring, inventory management, and system logging.
 
-- Backend: FastAPI + `psutil`
-- Frontend: static HTML + Chart.js (CDN)
-- “AI insights”: rolling z-score anomaly detection over recent history
+- **Backend:** FastAPI + SQLite + `psutil`
+- **Frontend:** Static HTML/CSS/JS + Chart.js (CDN)
+- **Agents:** Lightweight Python agents for Linux hosts (Ubuntu, Debian, RHEL, CentOS, Rocky Linux)
+- **Anomaly detection:** Rolling z-score over recent metric history
 
-## UI pages
+## UI Pages
 
-- Dashboard: `/` (single-page app sections via hash)
-	- `/#problems` — Problems (current problems + recent host events)
-	- `/#hosts` — Hosts inventory
-	- `/#maps` — Maps
-- Inventory: `/inventory` (multi-page)
-- Overview: `/overview` (multi-page)
-- Configuration: `/configuration` (multi-page)
-- Hosts Management: `/hosts` (multi-page) - Discovered hosts and agent deployment
-- User Management: `/users` (multi-page) - User and group management
-- User Groups: `/user-groups` (multi-page) - Group-based access control
+| Page | URL | Description |
+|------|-----|-------------|
+| Dashboard | `/` | Overview, Problems, Hosts, Maps |
+| Host Monitor | `/host?id=<id>` | Per-host real-time charts (CPU, RAM, Disk, Network, GPU) |
+| Overview | `/overview` | System overview |
+| Inventory | `/inventory` | Asset/equipment tracking (rack, shelf, S/N) |
+| Configuration | `/configuration` | System configuration |
+| Hosts Management | `/hosts` | Discovered hosts and agent deployment |
+| System Logs | `/logs` | Filterable system event log |
+| User Management | `/users` | User accounts |
+| User Groups | `/user-groups` | Group-based access control |
+
+## Key Features
+
+### Host Monitor (`/host?id=<id>`)
+- Real-time charts updating every ~3 seconds (CPU, RAM, Disk, Network, GPU)
+- Frontend rolling ring buffer — 120-point history (2 min at 1s polling)
+- **Multi-GPU support** — per-GPU utilization %, VRAM used/total, temperature tiles and charts (via `nvidia-smi`)
+- **Problem detection** — header blinks red when CPU ≥ 75%, RAM ≥ 80%, Disk ≥ 85%, GPU ≥ 85%, or agent offline
+- **Per-host error history panel** — shows active problems + last 50 log entries for that host
+- Protocol checks: ICMP, HTTP, HTTPS, SSH, DNS, SNMP, NTP
+
+### System Logs (`/logs`)
+- Auto-logs threshold breaches from agent metrics (CPU, RAM, Disk, GPU util/temp)
+- Frontend also reports problems to `/api/logs` when detected on the Host Monitor page
+- Filter by level (Critical / Warning / Info) and hostname
+- Summary tiles: Critical / Warning / Info / Total counts
+- Auto-refreshes every 5 seconds
+- Clear all logs button (admin)
+
+### Inventory (`/inventory`)
+- Track servers, racks, switches, PDUs, and other equipment
+- Fields: **Name**, **Category**, **Rack**, **Shelf/Unit**, **S/N** (serial number), **Qty**, **Notes**
+- Summary tiles: Total Items, Categories, Racks, Last Refresh
+- Search across all fields
+- Admin-only add/remove
+
+### Agents
+- Post metrics every **3 seconds** (down from 30s)
+- CPU sampling interval: **0.5s**
+- GPU metrics via `nvidia-smi` — multi-GPU list with percent, VRAM, temperature
+- Supported: Ubuntu, Debian, RHEL, CentOS, Rocky Linux
+
+### System Log API
+- `GET /api/logs` — list logs, filterable by `level` and `hostname`
+- `POST /api/logs` — write a log entry
+- `DELETE /api/logs` — clear all logs (admin)
+- `GET /api/logs/host/{hostname}` — per-host log history
+- Stored in `data/system_logs.json`, rolling cap of 2000 entries
 
 ## Quickstart
 

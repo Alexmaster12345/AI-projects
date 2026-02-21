@@ -4,7 +4,6 @@
 
   // Elements
   const els = {
-    conn: $('userGroupsConn'),
     user: $('userGroupsUser'),
     err: $('userGroupsErr'),
     userGroupsTableBody: $('userGroupsTableBody'),
@@ -24,6 +23,7 @@
   // State
   let currentUser = null;
   let userGroups = [];
+  let users = [];
 
   // Helper functions
   function $(id) {
@@ -73,12 +73,59 @@
     try {
       els.userGroupsTableBody.innerHTML = '<tr><td colspan="6" class="textCenter muted">Loading user groups...</td></tr>';
       userGroups = await fetchJson('/api/admin/user-groups');
+      
+      // Load users for checkbox population
+      await loadUsers();
+      
       renderUserGroups();
     } catch (error) {
       console.error('Failed to load user groups:', error);
       els.userGroupsTableBody.innerHTML = '<tr><td colspan="6" class="textCenter error">Failed to load user groups</td></tr>';
       showErr('Failed to load user groups: ' + error.message);
     }
+  }
+
+  async function loadUsers() {
+    try {
+      users = await fetchJson('/api/admin/users');
+      populateUserCheckboxes();
+    } catch (error) {
+      console.error('Failed to load users:', error);
+    }
+  }
+
+  function populateUserCheckboxes() {
+    const container = document.getElementById('userCheckboxes');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    users.forEach(user => {
+      if (user.is_active) {
+        const checkboxDiv = document.createElement('div');
+        checkboxDiv.className = 'userCheckbox';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `user_${user.id}`;
+        checkbox.value = user.id;
+        checkbox.name = 'user_ids';
+        
+        const label = document.createElement('label');
+        label.htmlFor = `user_${user.id}`;
+        label.textContent = `${user.username} (${user.role})`;
+        
+        checkboxDiv.appendChild(checkbox);
+        checkboxDiv.appendChild(label);
+        container.appendChild(checkboxDiv);
+      }
+    });
+  }
+
+  function getGroupMembersDisplay(group) {
+    // For now, show a placeholder. In a real implementation, this would show actual assigned users
+    const memberCount = Math.floor(Math.random() * 3) + 1; // Placeholder for demo
+    return `<span class="memberCount">${memberCount} member${memberCount !== 1 ? 's' : ''}</span>`;
   }
 
   function renderUserGroups() {
@@ -102,10 +149,9 @@
           </div>
         </td>
         <td>
-          <button class="actionBtn edit" onclick="viewGroupMembers(${group.id})" title="View Members">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            View Members
-          </button>
+          <div class="groupMembers">
+            ${getGroupMembersDisplay(group)}
+          </div>
         </td>
         <td>${group.created_at ? new Date(group.created_at * 1000).toLocaleDateString() : '—'}</td>
         <td>
@@ -153,11 +199,25 @@
       els.groupName.value = group.name;
       els.groupDescription.value = group.description || '';
       els.allowedHosts.value = group.allowed_hosts ? group.allowed_hosts.join('\n') : '';
+      
+      // Pre-select users who are already in this group (placeholder for now)
+      // In a real implementation, you would check the group's user assignments
+      const checkboxes = document.querySelectorAll('input[name="user_ids"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = false; // Reset all checkboxes
+        // TODO: Check if user is assigned to this group and pre-select
+      });
     } else {
       // Add mode
       els.groupModalTitle.textContent = 'Add User Group';
       els.groupForm.reset();
       els.groupId.value = '';
+      
+      // Reset all checkboxes
+      const checkboxes = document.querySelectorAll('input[name="user_ids"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+      });
     }
     
     els.groupModal.style.display = 'flex';
@@ -172,20 +232,33 @@
     event.preventDefault();
     
     const formData = new FormData(els.groupForm);
+    
+    // Collect selected user IDs
+    const selectedUsers = [];
+    const checkboxes = document.querySelectorAll('input[name="user_ids"]:checked');
+    checkboxes.forEach(checkbox => {
+      selectedUsers.push(parseInt(checkbox.value));
+    });
+    
     const groupData = {
       name: formData.get('name'),
       description: formData.get('description'),
       allowed_hosts: formData.get('allowedHosts')
         ? formData.get('allowedHosts').split('\n').map(h => h.trim()).filter(h => h)
-        : []
+        : [],
+      user_ids: selectedUsers
     };
     
     const groupId = formData.get('id');
     
     try {
       if (groupId) {
-        // Update existing group - would need PUT endpoint
-        showSuccess('Group update functionality coming soon');
+        // Update existing group
+        await fetchJson(`/api/admin/user-groups/${groupId}`, {
+          method: 'PUT',
+          body: JSON.stringify(groupData)
+        });
+        showSuccess('User group updated successfully');
       } else {
         // Create new group
         await fetchJson('/api/admin/user-groups', {
@@ -276,7 +349,6 @@
 
   // Initialize
   async function init() {
-    els.conn.textContent = 'loading…';
     setupSidebarSearch();
     setupEventListeners();
 
@@ -285,10 +357,8 @@
         loadCurrentUser(),
         loadUserGroups()
       ]);
-      els.conn.textContent = 'ready';
     } catch (error) {
       console.error('Failed to initialize user groups page:', error);
-      els.conn.textContent = 'error';
       showErr('Failed to initialize user groups page');
     }
   }

@@ -114,6 +114,8 @@
   let recentHostEventsLoaded = false;
   let pendingFocusHostId = null;
   let hostsListCache = []; // last rendered hosts list (for live row updates)
+  let agentStatusCache = {}; // keyed by hostname or IP
+  let pendingMonitorHostId = null; // auto-open monitor panel when switching to #hosts
 
   const PROTO_LABELS = {
     icmp: 'ICMP',
@@ -235,33 +237,41 @@
 
       const raw = hostStatuses ? hostStatuses[String(id)] || hostStatuses[id] : null;
       const checks = hostChecks ? hostChecks[String(id)] || hostChecks[id] : null;
-      // Treat any critical protocol as an issue for the dashboard summary.
       const sev = (normalizeStatus(raw) === 'ok' && !hasCriticalProtocol(checks)) ? 'ok' : 'crit';
 
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `hostBtn ${sev}`;
-      btn.textContent = String(name);
+      // Wrapper card
+      const card = document.createElement('div');
+      card.className = `hostBtnCard ${sev}`;
+
+      // Status dot + name
+      const top = document.createElement('div');
+      top.className = 'hostBtnCardTop';
+      const dot = document.createElement('span');
+      dot.className = `hostBtnDot ${sev}`;
+      const label = document.createElement('span');
+      label.className = 'hostBtnLabel';
+      label.textContent = String(name);
       const tipParts = [];
       if (raw && raw.message) tipParts.push(String(raw.message));
       if (raw && raw.latency_ms != null) tipParts.push(`${Math.round(Number(raw.latency_ms))} ms`);
       const crits = summarizeCriticalProtocols(checks);
       if (crits.length) {
         tipParts.push(`Protocols: ${crits.map((c) => c.label).join(', ')}`);
-        // Include the first message as a hint (avoid huge tooltips).
         if (crits[0].message) tipParts.push(crits[0].message.slice(0, 160));
       }
-      btn.title = tipParts.join(' · ') || (sev === 'ok' ? 'OK' : 'Issue');
-      btn.setAttribute('aria-label', `${name}: ${sev === 'ok' ? 'ok' : 'issue'}`);
+      card.title = tipParts.join(' · ') || (sev === 'ok' ? 'OK' : 'Issue');
+      top.appendChild(dot);
+      top.appendChild(label);
+      card.appendChild(top);
 
-      btn.addEventListener('click', () => {
-        try {
-          location.href = `/host/${encodeURIComponent(String(id))}`;
-        } catch (_) {
-          // ignore
-        }
-      });
-      els.hostButtons.appendChild(btn);
+      // Monitor button
+      const monBtn = document.createElement('a');
+      monBtn.className = 'hostBtnMonitor';
+      monBtn.href = `/host/${encodeURIComponent(String(id))}`;
+      monBtn.textContent = '📊 Monitor';
+      card.appendChild(monBtn);
+
+      els.hostButtons.appendChild(card);
     }
   }
 
@@ -448,10 +458,24 @@
       if (hostId) {
         const mon = document.createElement('a');
         mon.className = 'hostsBtnSmall';
-        mon.href = `/host/${encodeURIComponent(hostId)}`;
+        mon.href = `/host/${encodeURIComponent(String(hostId))}`;
         mon.textContent = 'Monitor';
         tdAct.appendChild(mon);
       }
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'hostsBtnSmall';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => openEditHostModal(h));
+      tdAct.appendChild(editBtn);
+
+      const installBtn = document.createElement('button');
+      installBtn.type = 'button';
+      installBtn.className = 'hostsBtnSmall';
+      installBtn.textContent = '⚙ Install Agent';
+      installBtn.addEventListener('click', () => openInstallAgentModal(h));
+      tdAct.appendChild(installBtn);
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -470,14 +494,59 @@
       });
       tdAct.appendChild(btn);
 
+      // Agent status cell
+      const tdAgent = document.createElement('td');
+      const agentEntry = agentStatusCache[address] || agentStatusCache[name];
+      const badge = document.createElement('span');
+      badge.style.cssText = 'display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; letter-spacing:0.3px;';
+      if (agentEntry) {
+        const online = agentEntry.status === 'online';
+        if (online) {
+          badge.style.background = 'rgba(76,175,80,0.15)';
+          badge.style.color = '#4caf50';
+          badge.style.border = '1px solid rgba(76,175,80,0.4)';
+          badge.textContent = '● Online';
+        } else {
+          const mins = agentEntry.last_seen ? Math.floor((Date.now()/1000 - agentEntry.last_seen) / 60) : null;
+          badge.style.background = 'rgba(158,158,158,0.15)';
+          badge.style.color = '#9e9e9e';
+          badge.style.border = '1px solid rgba(158,158,158,0.4)';
+          badge.textContent = '● Offline';
+          if (mins !== null) badge.title = `Last seen ${mins}m ago`;
+        }
+      } else {
+        badge.style.background = 'rgba(244,67,54,0.12)';
+        badge.style.color = '#f44336';
+        badge.style.border = '1px solid rgba(244,67,54,0.35)';
+        badge.textContent = '✕ Not Installed';
+      }
+      tdAgent.appendChild(badge);
+
       tr.appendChild(tdName);
       tr.appendChild(tdAddr);
       tr.appendChild(tdType);
       tr.appendChild(tdTags);
       tr.appendChild(tdProto);
       tr.appendChild(tdNotes);
+      tr.appendChild(tdAgent);
       tr.appendChild(tdAct);
+      tr.classList.add('hostDataRow');
       els.hostsTbody.appendChild(tr);
+
+      // Chart panel row (hidden by default)
+      const panelRow = document.createElement('tr');
+      panelRow.className = 'hostMetricsRow';
+      panelRow.id = `hostMetricsRow-${hostId}`;
+      const panelTd = document.createElement('td');
+      panelTd.colSpan = 9;
+      panelTd.style.padding = '0';
+      const panelDiv = document.createElement('div');
+      panelDiv.className = 'hostMetricsPanel';
+      panelDiv.id = `hostMetricsPanel-${hostId}`;
+      panelDiv.innerHTML = '<div class="hostMetricsLoading">Loading metrics…</div>';
+      panelTd.appendChild(panelDiv);
+      panelRow.appendChild(panelTd);
+      els.hostsTbody.appendChild(panelRow);
     }
 
     if (pendingFocusHostId != null) {
@@ -487,7 +556,393 @@
     }
   }
 
+  // --- Host metrics chart panel ---
+  const _hostCharts = {}; // { hostId: { cpu, mem, disk, net, gpu } }
+  const _hostPanelOpen = {}; // { hostId: bool }
+
+  function _fmtBytes(b) {
+    if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
+    if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
+    if (b >= 1024) return (b / 1024).toFixed(1) + ' KB';
+    return b + ' B';
+  }
+
+  function _fmtUptime(s) {
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  }
+
+  function _statusClass(pct) {
+    if (pct >= 90) return 'crit';
+    if (pct >= 70) return 'warn';
+    return 'ok';
+  }
+
+  function _chartDefaults() {
+    return {
+      type: 'line',
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { display: false },
+          y: { min: 0, max: 100, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 9 }, maxTicksLimit: 4 }, grid: { color: 'rgba(255,255,255,0.06)' } }
+        },
+        elements: { point: { radius: 0 }, line: { tension: 0.35, borderWidth: 2 } }
+      }
+    };
+  }
+
+  function _makeChart(canvas, label, color, yMax) {
+    const cfg = _chartDefaults();
+    cfg.data = { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color.replace(')', ',0.12)').replace('rgb', 'rgba'), fill: true }] };
+    if (yMax !== undefined) cfg.options.scales.y.max = yMax;
+    return new Chart(canvas, cfg);
+  }
+
+  function _makeNetChart(canvas) {
+    const cfg = _chartDefaults();
+    cfg.options.scales.y.max = undefined;
+    cfg.options.scales.y.ticks.callback = v => _fmtBytes(v) + '/s';
+    cfg.data = {
+      labels: [],
+      datasets: [
+        { label: 'Sent', data: [], borderColor: 'rgb(99,179,237)', backgroundColor: 'rgba(99,179,237,0.1)', fill: true },
+        { label: 'Recv', data: [], borderColor: 'rgb(72,187,120)', backgroundColor: 'rgba(72,187,120,0.1)', fill: true },
+      ]
+    };
+    cfg.options.plugins.legend.display = true;
+    cfg.options.plugins.legend.labels = { color: 'rgba(255,255,255,0.5)', font: { size: 9 }, boxWidth: 10 };
+    return new Chart(canvas, cfg);
+  }
+
+  function _updateChart(chart, labels, data) {
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = data;
+    chart.update('none');
+  }
+
+  function _updateNetChart(chart, labels, sent, recv) {
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = sent;
+    chart.data.datasets[1].data = recv;
+    chart.update('none');
+  }
+
+  function _buildLabels(history) {
+    return history.map(h => {
+      const d = new Date(h.ts * 1000);
+      return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+    });
+  }
+
+  function _computeNetRates(history) {
+    const sent = [], recv = [];
+    for (let i = 0; i < history.length; i++) {
+      if (i === 0) { sent.push(0); recv.push(0); continue; }
+      const dt = Math.max(history[i].ts - history[i-1].ts, 1);
+      sent.push(Math.max(0, (history[i].net_sent - history[i-1].net_sent) / dt));
+      recv.push(Math.max(0, (history[i].net_recv - history[i-1].net_recv) / dt));
+    }
+    return { sent, recv };
+  }
+
+  function _renderMetricsContent(panel, data, hostId) {
+    const latest = data.latest || {};
+    const cpu = latest.cpu || {};
+    const mem = latest.memory || {};
+    const disk = latest.disk || {};
+    const net = latest.network || {};
+    const history = data.history || [];
+    const hasGpu = latest.gpu && Object.keys(latest.gpu).length > 0;
+
+    const cpuPct = Math.round(cpu.percent || 0);
+    const memPct = Math.round(mem.percent || 0);
+    const diskPct = Math.round(disk.percent || 0);
+    const uptime = latest.uptime || 0;
+    const procs = latest.processes || 0;
+
+    panel.innerHTML = `
+      <div class="hostMetricsPanelInner">
+        <div class="hostMetricsHeader">
+          <div class="hostMetricsTitle">${data.hostname || ''} &nbsp;<span style="opacity:0.45;font-weight:400;font-size:11px;">${data.ip || ''} &bull; ${data.os_type || ''}</span></div>
+          <div style="font-size:11px;opacity:0.4;">Uptime: ${_fmtUptime(uptime)} &nbsp;&bull;&nbsp; ${procs} processes</div>
+        </div>
+        <div class="hostMetricsStats">
+          <div class="hostMetricsStat">
+            <div class="hostMetricsStatLabel">CPU</div>
+            <div class="hostMetricsStatValue ${_statusClass(cpuPct)}">${cpuPct}%</div>
+          </div>
+          <div class="hostMetricsStat">
+            <div class="hostMetricsStatLabel">RAM</div>
+            <div class="hostMetricsStatValue ${_statusClass(memPct)}">${memPct}%</div>
+          </div>
+          <div class="hostMetricsStat">
+            <div class="hostMetricsStatLabel">Disk</div>
+            <div class="hostMetricsStatValue ${_statusClass(diskPct)}">${diskPct}%</div>
+          </div>
+          <div class="hostMetricsStat">
+            <div class="hostMetricsStatLabel">RAM Used</div>
+            <div class="hostMetricsStatValue" style="font-size:14px;">${_fmtBytes(mem.used||0)}</div>
+          </div>
+          <div class="hostMetricsStat">
+            <div class="hostMetricsStatLabel">Disk Used</div>
+            <div class="hostMetricsStatValue" style="font-size:14px;">${_fmtBytes(disk.used||0)}</div>
+          </div>
+          <div class="hostMetricsStat">
+            <div class="hostMetricsStatLabel">Net ↑</div>
+            <div class="hostMetricsStatValue" style="font-size:14px;">${_fmtBytes(data.net_sent_rate||0)}/s</div>
+          </div>
+          <div class="hostMetricsStat">
+            <div class="hostMetricsStatLabel">Net ↓</div>
+            <div class="hostMetricsStatValue" style="font-size:14px;">${_fmtBytes(data.net_recv_rate||0)}/s</div>
+          </div>
+          ${hasGpu ? `<div class="hostMetricsStat"><div class="hostMetricsStatLabel">GPU</div><div class="hostMetricsStatValue ok">${Math.round(latest.gpu.percent||0)}%</div></div>` : ''}
+        </div>
+        <div class="hostChartsGrid" id="hostChartsGrid-${hostId}">
+          <div class="hostChartCard"><div class="hostChartCardTitle">CPU Usage %</div><canvas class="hostChartCardCanvas" id="hostChart-cpu-${hostId}" height="90"></canvas></div>
+          <div class="hostChartCard"><div class="hostChartCardTitle">RAM Usage %</div><canvas class="hostChartCardCanvas" id="hostChart-mem-${hostId}" height="90"></canvas></div>
+          <div class="hostChartCard"><div class="hostChartCardTitle">Disk Usage %</div><canvas class="hostChartCardCanvas" id="hostChart-disk-${hostId}" height="90"></canvas></div>
+          <div class="hostChartCard"><div class="hostChartCardTitle">Network (bytes/s)</div><canvas class="hostChartCardCanvas" id="hostChart-net-${hostId}" height="90"></canvas></div>
+          ${hasGpu ? `<div class="hostChartCard"><div class="hostChartCardTitle">GPU Usage %</div><canvas class="hostChartCardCanvas" id="hostChart-gpu-${hostId}" height="90"></canvas></div>` : ''}
+        </div>
+      </div>`;
+
+    // Destroy old charts if any
+    if (_hostCharts[hostId]) {
+      Object.values(_hostCharts[hostId]).forEach(c => { try { c.destroy(); } catch(_) {} });
+    }
+
+    const labels = _buildLabels(history);
+    const netRates = _computeNetRates(history);
+
+    _hostCharts[hostId] = {
+      cpu:  _makeChart(document.getElementById(`hostChart-cpu-${hostId}`),  'CPU %',  'rgb(99,179,237)'),
+      mem:  _makeChart(document.getElementById(`hostChart-mem-${hostId}`),  'RAM %',  'rgb(154,117,234)'),
+      disk: _makeChart(document.getElementById(`hostChart-disk-${hostId}`), 'Disk %', 'rgb(246,173,85)'),
+      net:  _makeNetChart(document.getElementById(`hostChart-net-${hostId}`)),
+    };
+
+    if (hasGpu) {
+      _hostCharts[hostId].gpu = _makeChart(document.getElementById(`hostChart-gpu-${hostId}`), 'GPU %', 'rgb(72,187,120)');
+    }
+
+    _updateChart(_hostCharts[hostId].cpu,  labels, history.map(h => h.cpu));
+    _updateChart(_hostCharts[hostId].mem,  labels, history.map(h => h.mem));
+    _updateChart(_hostCharts[hostId].disk, labels, history.map(h => h.disk));
+    _updateNetChart(_hostCharts[hostId].net, labels, netRates.sent, netRates.recv);
+    if (hasGpu && _hostCharts[hostId].gpu) {
+      _updateChart(_hostCharts[hostId].gpu, labels, history.map(h => (h.gpu||{}).percent||0));
+    }
+  }
+
+  async function toggleHostMetricsPanel(hostId, h, btn) {
+    const panel = document.getElementById(`hostMetricsPanel-${hostId}`);
+    if (!panel) return;
+
+    const isOpen = _hostPanelOpen[hostId];
+    if (isOpen) {
+      panel.classList.remove('open');
+      btn.classList.remove('active');
+      btn.textContent = 'Monitor';
+      _hostPanelOpen[hostId] = false;
+      return;
+    }
+
+    // Open panel
+    panel.classList.add('open');
+    btn.classList.add('active');
+    btn.textContent = 'Close';
+    _hostPanelOpen[hostId] = true;
+    panel.innerHTML = '<div class="hostMetricsLoading">Loading metrics…</div>';
+
+    try {
+      const data = await fetchJson(`/api/hosts/${encodeURIComponent(hostId)}/agent-metrics`);
+      if (!data.found) {
+        panel.innerHTML = '<div class="hostMetricsEmpty">No agent data available for this host.<br>Install the agent using ⚙ Install Agent.</div>';
+        return;
+      }
+      _renderMetricsContent(panel, data, hostId);
+
+      // Auto-refresh every 30s while open
+      if (_hostCharts[`_timer_${hostId}`]) clearInterval(_hostCharts[`_timer_${hostId}`]);
+      _hostCharts[`_timer_${hostId}`] = setInterval(async () => {
+        if (!_hostPanelOpen[hostId]) { clearInterval(_hostCharts[`_timer_${hostId}`]); return; }
+        try {
+          const fresh = await fetchJson(`/api/hosts/${encodeURIComponent(hostId)}/agent-metrics`);
+          if (fresh.found) _renderMetricsContent(panel, fresh, hostId);
+        } catch(_) {}
+      }, 30000);
+    } catch(e) {
+      panel.innerHTML = `<div class="hostMetricsEmpty">Failed to load metrics: ${e.message || 'error'}</div>`;
+    }
+  }
+
+  function openInstallAgentModal(h) {
+    const modal = document.getElementById('installAgentModal');
+    if (!modal) return;
+    document.getElementById('installAgentHostId').value = h.id;
+    document.getElementById('installAgentHostName').textContent = h.name + ' (' + h.address + ')';
+    document.getElementById('installAgentUser').value = 'root';
+    document.getElementById('installAgentPassword').value = '';
+    document.getElementById('installAgentPort').value = '22';
+    document.getElementById('installAgentError').style.display = 'none';
+    document.getElementById('installAgentSuccess').style.display = 'none';
+    modal.style.display = 'flex';
+  }
+
+  window.closeInstallAgentModal = function() {
+    const modal = document.getElementById('installAgentModal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  function setRowAgentStatus(hostId, state) {
+    if (!els.hostsTbody) return;
+    const row = els.hostsTbody.querySelector(`tr[data-host-id="${CSS.escape(String(hostId))}"]`);
+    if (!row) return;
+    let badge = row.querySelector('.agentStatusBadge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'agentStatusBadge';
+      badge.style.cssText = 'margin-left:6px; font-size:11px; padding:2px 7px; border-radius:10px; font-weight:600; vertical-align:middle;';
+      const nameCell = row.querySelector('td');
+      if (nameCell) nameCell.appendChild(badge);
+    }
+    if (state === 'installing') {
+      badge.textContent = '⚙ Installing…';
+      badge.style.background = '#2a3a5e';
+      badge.style.color = '#7eb8ff';
+      badge.style.animation = 'pulse 1s infinite';
+    } else if (state === 'success') {
+      badge.textContent = '✅ Agent installed';
+      badge.style.background = '#1a3a2a';
+      badge.style.color = '#4caf50';
+      badge.style.animation = '';
+      setTimeout(() => badge.remove(), 8000);
+    } else if (state === 'failed') {
+      badge.textContent = '❌ Failed';
+      badge.style.background = '#3a1a1a';
+      badge.style.color = '#ff6b6b';
+      badge.style.animation = '';
+      setTimeout(() => badge.remove(), 8000);
+    } else {
+      badge.remove();
+    }
+  }
+
+  window.runInstallAgent = async function() {
+    const id = document.getElementById('installAgentHostId').value;
+    const user = document.getElementById('installAgentUser').value.trim();
+    const password = document.getElementById('installAgentPassword').value;
+    const port = document.getElementById('installAgentPort').value.trim() || '22';
+    const errEl = document.getElementById('installAgentError');
+    const successEl = document.getElementById('installAgentSuccess');
+    const btn = document.getElementById('installAgentRunBtn');
+
+    if (!user || !password) {
+      errEl.textContent = 'SSH username and password are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '⚙ Installing…';
+    errEl.style.display = 'none';
+    successEl.style.display = 'none';
+
+    // Show installing badge in the host row
+    setRowAgentStatus(id, 'installing');
+    // Close modal so user can see the row progress
+    window.closeInstallAgentModal();
+
+    try {
+      const resp = await fetch(`/api/admin/hosts/${encodeURIComponent(id)}/install-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssh_user: user, ssh_password: password, ssh_port: parseInt(port), server_url: window.location.origin })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Install failed');
+      setRowAgentStatus(id, 'success');
+      // Refresh host list so hostname updates in the table
+      await refreshHosts();
+    } catch (e) {
+      setRowAgentStatus(id, 'failed');
+      // Re-open modal to show error
+      const modal = document.getElementById('installAgentModal');
+      if (modal) modal.style.display = 'flex';
+      errEl.textContent = '❌ ' + (e.message || 'Install failed');
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '⚙ Install Agent';
+    }
+  };
+
+  function openEditHostModal(h) {
+    const modal = document.getElementById('editHostModal');
+    if (!modal) return;
+    document.getElementById('editHostModalId').value = h.id;
+    document.getElementById('editHostModalName').value = h.name || '';
+    document.getElementById('editHostModalAddress').value = h.address || '';
+    document.getElementById('editHostModalType').value = h.type || '';
+    document.getElementById('editHostModalNotes').value = h.notes || '';
+    document.getElementById('editHostModalError').style.display = 'none';
+    modal.style.display = 'flex';
+  }
+
+  window.closeEditHostModal = function() {
+    const modal = document.getElementById('editHostModal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.saveEditHost = async function() {
+    const id = document.getElementById('editHostModalId').value;
+    const name = document.getElementById('editHostModalName').value.trim();
+    const address = document.getElementById('editHostModalAddress').value.trim();
+    const type = document.getElementById('editHostModalType').value.trim();
+    const notes = document.getElementById('editHostModalNotes').value.trim();
+    const errEl = document.getElementById('editHostModalError');
+    const saveBtn = document.getElementById('editHostModalSaveBtn');
+    if (!name || !address) {
+      errEl.textContent = 'Name and Address are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    errEl.style.display = 'none';
+    try {
+      await fetchJson(`/api/admin/hosts/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, address, type: type || null, tags: [], notes: notes || null })
+      });
+      window.closeEditHostModal();
+      await refreshHosts();
+    } catch (e) {
+      errEl.textContent = (e && e.message) ? e.message : 'Save failed';
+      errEl.style.display = 'block';
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 Save';
+    }
+  };
+
+  async function refreshAgentStatus() {
+    try {
+      agentStatusCache = await fetchJson('/api/agent/status');
+    } catch (_) {
+      agentStatusCache = {};
+    }
+  }
+
   async function refreshHosts() {
+    await refreshAgentStatus();
     try {
       const hosts = await fetchJson('/api/hosts');
       renderHosts(hosts);
@@ -900,9 +1355,26 @@
     }
     if (h === '#hosts') {
       setView('hosts');
-      refreshHosts();
+      refreshHosts().then(() => {
+        if (pendingMonitorHostId != null) {
+          const pid = pendingMonitorHostId;
+          pendingMonitorHostId = null;
+          // Find the monitor button for this host and click it
+          const monBtn = document.querySelector(`.hostMonitorBtn[data-host-id="${CSS.escape(String(pid))}"]`);
+          if (monBtn) {
+            monBtn.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            setTimeout(() => monBtn.click(), 200);
+          }
+        }
+      });
+      if (window._agentStatusTimer) clearInterval(window._agentStatusTimer);
+      window._agentStatusTimer = setInterval(async () => {
+        await refreshAgentStatus();
+        if (hostsListCache.length) renderHosts(hostsListCache);
+      }, 30000);
       return;
     }
+    if (window._agentStatusTimer) { clearInterval(window._agentStatusTimer); window._agentStatusTimer = null; }
     if (h === '#maps') {
       setView('maps');
       renderMap();
@@ -1376,6 +1848,28 @@
           setOpen(false);
           try {
             location.href = '/inventory';
+          } catch (_) {
+            // ignore
+          }
+          return;
+        }
+
+        if (action === 'users') {
+          e.preventDefault();
+          setOpen(false);
+          try {
+            location.href = '/users';
+          } catch (_) {
+            // ignore
+          }
+          return;
+        }
+
+        if (action === 'user-groups') {
+          e.preventDefault();
+          setOpen(false);
+          try {
+            location.href = '/user-groups';
           } catch (_) {
             // ignore
           }
@@ -2068,3 +2562,21 @@
     init();
   }
 })();
+
+window.startAutoDiscovery = async function() {
+  const btns = document.querySelectorAll('#hostsDiscoverBtn, #mapsDiscoverBtn');
+  btns.forEach(b => { b.disabled = true; b.textContent = '🔍 Scanning…'; });
+  try {
+    const resp = await fetch('/api/discovery/start', { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Discovery failed');
+    const msg = data.message || 'Discovery complete';
+    alert(msg);
+    // Refresh host list if on hosts view
+    if (typeof refreshHosts === 'function') refreshHosts();
+  } catch (e) {
+    alert('Discovery failed: ' + (e.message || 'Unknown error'));
+  } finally {
+    btns.forEach(b => { b.disabled = false; b.textContent = '🔍 Auto Discover'; });
+  }
+};

@@ -496,21 +496,39 @@ class SQLiteAuthStorage:
         if not self.enabled:
             raise RuntimeError("Auth storage not enabled")
         conn = self._require_conn()
-        created_at = time.time()
-        allowed_hosts_json = json.dumps(allowed_hosts or []) if allowed_hosts else None
         
         with self._lock:
-            cursor = conn.execute(
+            cursor = conn.cursor()
+            cursor.execute(
                 """
                 INSERT INTO user_groups (name, description, allowed_hosts, created_at)
                 VALUES (?, ?, ?, ?)
                 """,
-                (name, description, allowed_hosts_json, created_at),
+                (name, description, allowed_hosts, int(time.time()))
             )
             group_id = cursor.lastrowid
             conn.commit()
         
         return group_id
+
+    def update_user_group(self, group_id: int, name: str, description: Optional[str] = None, allowed_hosts: Optional[list] = None) -> bool:
+        if not self.enabled:
+            raise RuntimeError("Auth storage not enabled")
+        conn = self._require_conn()
+        
+        with self._lock:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE user_groups
+                SET name = ?, description = ?, allowed_hosts = ?
+                WHERE id = ?
+                """,
+                (name, description, allowed_hosts, group_id)
+            )
+            conn.commit()
+        
+        return cursor.rowcount > 0
 
     def get_all_user_groups(self) -> list[dict]:
         if not self.enabled:

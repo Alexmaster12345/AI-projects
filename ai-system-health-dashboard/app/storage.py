@@ -66,6 +66,9 @@ class SQLiteMetricsStorage:
                 name TEXT NOT NULL,
                 category TEXT,
                 location TEXT,
+                rack TEXT,
+                shelf TEXT,
+                serial_number TEXT,
                 quantity INTEGER NOT NULL DEFAULT 1,
                 notes TEXT,
                 created_ts REAL NOT NULL
@@ -73,6 +76,14 @@ class SQLiteMetricsStorage:
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_inventory_items_created ON inventory_items(created_ts);")
+        # Migrate: add new columns if they don't exist yet
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(inventory_items)").fetchall()}
+        if 'rack' not in existing_cols:
+            conn.execute("ALTER TABLE inventory_items ADD COLUMN rack TEXT")
+        if 'shelf' not in existing_cols:
+            conn.execute("ALTER TABLE inventory_items ADD COLUMN shelf TEXT")
+        if 'serial_number' not in existing_cols:
+            conn.execute("ALTER TABLE inventory_items ADD COLUMN serial_number TEXT")
         conn.commit()
         self._conn = conn
 
@@ -243,6 +254,38 @@ class SQLiteMetricsStorage:
             created_ts=float(now),
         )
 
+    def update_host(self, host_id: int, host_in: "HostCreate") -> "Host | None":
+        if not self.enabled:
+            return None
+        conn = self._require_conn()
+        tags = [str(t).strip() for t in (host_in.tags or []) if str(t).strip()]
+        tags_json = json.dumps(tags, separators=(",", ":"))
+        with self._lock:
+            cur = conn.execute(
+                "UPDATE hosts SET name=?, address=?, type=?, tags_json=?, notes=? WHERE id=? AND is_active=1",
+                (
+                    str(host_in.name).strip(),
+                    str(host_in.address).strip(),
+                    (str(host_in.type).strip() if host_in.type and str(host_in.type).strip() else None),
+                    tags_json,
+                    (str(host_in.notes) if host_in.notes and str(host_in.notes).strip() else None),
+                    int(host_id),
+                ),
+            )
+            conn.commit()
+        if not (cur.rowcount or 0):
+            return None
+        rows = conn.execute("SELECT id, name, address, type, tags_json, notes, is_active, created_ts FROM hosts WHERE id=?", (int(host_id),)).fetchone()
+        if not rows:
+            return None
+        (hid, name, address, htype, tj, notes, is_active, created_ts) = rows
+        try:
+            parsed_tags = json.loads(tj or "[]")
+        except Exception:
+            parsed_tags = []
+        from .models import Host
+        return Host(id=int(hid), name=str(name), address=str(address), type=htype or None, tags=parsed_tags, notes=notes or None, is_active=bool(is_active), created_ts=float(created_ts))
+
     def deactivate_host(self, host_id: int) -> bool:
         if not self.enabled:
             return False
@@ -258,17 +301,20 @@ class SQLiteMetricsStorage:
         conn = self._require_conn()
         with self._lock:
             rows = conn.execute(
-                "SELECT id, name, category, location, quantity, notes, created_ts FROM inventory_items ORDER BY id DESC"
+                "SELECT id, name, category, location, rack, shelf, serial_number, quantity, notes, created_ts FROM inventory_items ORDER BY id DESC"
             ).fetchall()
         out: list[InventoryItem] = []
         for row in rows:
-            (iid, name, category, location, quantity, notes, created_ts) = row
+            (iid, name, category, location, rack, shelf, serial_number, quantity, notes, created_ts) = row
             out.append(
                 InventoryItem(
                     id=int(iid),
                     name=str(name),
                     category=(str(category) if category is not None and str(category).strip() != "" else None),
                     location=(str(location) if location is not None and str(location).strip() != "" else None),
+                    rack=(str(rack) if rack is not None and str(rack).strip() != "" else None),
+                    shelf=(str(shelf) if shelf is not None and str(shelf).strip() != "" else None),
+                    serial_number=(str(serial_number) if serial_number is not None and str(serial_number).strip() != "" else None),
                     quantity=int(quantity or 0),
                     notes=(str(notes) if notes is not None and str(notes).strip() != "" else None),
                     created_ts=float(created_ts),
@@ -281,15 +327,19 @@ class SQLiteMetricsStorage:
             raise RuntimeError("Inventory storage is disabled (metrics DB path not set)")
         conn = self._require_conn()
         now = time.time()
+        _s = lambda v: (str(v).strip() if v is not None and str(v).strip() != "" else None)
         with self._lock:
             cur = conn.execute(
-                "INSERT INTO inventory_items (name, category, location, quantity, notes, created_ts) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO inventory_items (name, category, location, rack, shelf, serial_number, quantity, notes, created_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     str(item_in.name).strip(),
-                    (str(item_in.category).strip() if item_in.category is not None and str(item_in.category).strip() != "" else None),
-                    (str(item_in.location).strip() if item_in.location is not None and str(item_in.location).strip() != "" else None),
+                    _s(item_in.category),
+                    _s(item_in.location),
+                    _s(item_in.rack),
+                    _s(item_in.shelf),
+                    _s(item_in.serial_number),
                     int(item_in.quantity or 0),
-                    (str(item_in.notes) if item_in.notes is not None and str(item_in.notes).strip() != "" else None),
+                    _s(item_in.notes),
                     float(now),
                 ),
             )
@@ -298,10 +348,13 @@ class SQLiteMetricsStorage:
         return InventoryItem(
             id=iid,
             name=str(item_in.name).strip(),
-            category=(str(item_in.category).strip() if item_in.category is not None and str(item_in.category).strip() != "" else None),
-            location=(str(item_in.location).strip() if item_in.location is not None and str(item_in.location).strip() != "" else None),
+            category=_s(item_in.category),
+            location=_s(item_in.location),
+            rack=_s(item_in.rack),
+            shelf=_s(item_in.shelf),
+            serial_number=_s(item_in.serial_number),
             quantity=int(item_in.quantity or 0),
-            notes=(str(item_in.notes) if item_in.notes is not None and str(item_in.notes).strip() != "" else None),
+            notes=_s(item_in.notes),
             created_ts=float(now),
         )
 
@@ -340,6 +393,12 @@ async def get_history(seconds: int) -> list[SystemSample]:
     if not storage.enabled:
         return []
     return await asyncio.to_thread(storage.query_history, seconds)
+
+
+async def update_host(host_id: int, host_in: "HostCreate") -> "Host | None":
+    if not storage.enabled:
+        return None
+    return await asyncio.to_thread(storage.update_host, host_id, host_in)
 
 
 async def prune_old() -> int:

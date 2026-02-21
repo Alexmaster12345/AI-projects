@@ -571,6 +571,138 @@ body[data-view="maps"] #mapsView { display: block; }
   background: rgba(255, 77, 109, 0.08);
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* --- Host metrics chart panel --- */
+.hostMetricsPanel {
+  display: none;
+  background: rgba(255,255,255,0.03);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding: 18px 20px 20px;
+  animation: fadeInDown 0.18s ease;
+}
+.hostMetricsPanel.open { display: table-row; }
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.hostMetricsPanelInner {
+  width: 100%;
+}
+
+.hostMetricsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.hostMetricsTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.hostMetricsStats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.hostMetricsStat {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 8px 14px;
+  min-width: 100px;
+  text-align: center;
+}
+
+.hostMetricsStatLabel {
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+
+.hostMetricsStatValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.hostMetricsStatValue.ok   { color: #4caf50; }
+.hostMetricsStatValue.warn { color: #ff9800; }
+.hostMetricsStatValue.crit { color: #f44336; }
+
+.hostChartsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.hostChartCard {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 12px 14px 10px;
+}
+
+.hostChartCardTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.hostChartCardCanvas {
+  width: 100% !important;
+  height: 90px !important;
+}
+
+.hostMetricsEmpty {
+  text-align: center;
+  padding: 24px;
+  color: var(--text);
+  opacity: 0.4;
+  font-size: 13px;
+}
+
+.hostMetricsLoading {
+  text-align: center;
+  padding: 20px;
+  color: var(--text);
+  opacity: 0.45;
+  font-size: 12px;
+}
+
+tr.hostMetricsRow td {
+  padding: 0 !important;
+}
+
+.hostsTable tbody tr.hostDataRow:hover {
+  background: rgba(255,255,255,0.025);
+  cursor: pointer;
+}
+
+.hostMonitorBtn.active {
+  background: rgba(99,179,237,0.15);
+  border-color: rgba(99,179,237,0.4);
+  color: #63b3ed;
+}
+
 /* --- Maps page --- */
 .mapsView {
   width: min(var(--container-width), 1400px);
@@ -1159,9 +1291,99 @@ header {
   flex: 1 0 100%;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+  gap: 10px;
+  align-items: flex-start;
   margin-bottom: 2px;
+}
+
+/* --- New host card design --- */
+.hostBtnCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 150px;
+  max-width: 200px;
+  cursor: default;
+  transition: background 0.15s;
+}
+
+.hostBtnCard:hover {
+  background: rgba(255,255,255,0.07);
+}
+
+.hostBtnCard.ok {
+  border-color: color-mix(in srgb, var(--ok) 35%, rgba(255,255,255,0.08));
+}
+
+.hostBtnCard.crit {
+  border-color: color-mix(in srgb, var(--crit) 45%, rgba(255,255,255,0.08));
+  animation: hostCritPulse 0.78s ease-in-out infinite;
+}
+
+.hostBtnCardTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hostBtnDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.3);
+}
+
+.hostBtnDot.ok   { background: var(--ok); box-shadow: 0 0 5px color-mix(in srgb, var(--ok) 60%, transparent); }
+.hostBtnDot.crit { background: var(--crit); box-shadow: 0 0 5px color-mix(in srgb, var(--crit) 60%, transparent); }
+
+.hostBtnLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.hostBtnAddr {
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.45;
+  padding-left: 14px;
+}
+
+.hostBtnAgentBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding-left: 14px;
+}
+
+.hostBtnMonitor {
+  display: block;
+  margin-top: 6px;
+  width: 100%;
+  background: rgba(99,179,237,0.12);
+  border: 1px solid rgba(99,179,237,0.30);
+  border-radius: 6px;
+  color: #63b3ed;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 0;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.15s;
+  box-sizing: border-box;
+}
+
+.hostBtnMonitor:hover {
+  background: rgba(99,179,237,0.22);
+  color: #63b3ed;
 }
 
 .hostBtn {

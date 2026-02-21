@@ -11,13 +11,17 @@
     err: $('invErr'),
 
     count: $('invCount'),
+    catCount: document.getElementById('invCatCount'),
+    locCount: document.getElementById('invLocCount'),
     ref: $('invRef'),
 
     manageCard: document.getElementById('invManageCard'),
     addForm: document.getElementById('invAddForm'),
     name: document.getElementById('invName'),
     category: document.getElementById('invCategory'),
-    location: document.getElementById('invLocation'),
+    rack: document.getElementById('invRack'),
+    shelf: document.getElementById('invShelf'),
+    serial: document.getElementById('invSerial'),
     qty: document.getElementById('invQty'),
     notes: document.getElementById('invNotes'),
     addBtn: document.getElementById('invAddBtn'),
@@ -109,7 +113,7 @@
     const filtered = !q
       ? items
       : items.filter((it) => {
-          const hay = [it.name, it.category, it.location, it.notes].map(norm).join(' · ');
+          const hay = [it.name, it.category, it.rack, it.shelf, it.serial_number, it.notes].map(norm).join(' · ');
           return hay.includes(q);
         });
 
@@ -118,9 +122,9 @@
     if (!filtered.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = isAdmin ? 6 : 5;
-      td.className = 'muted';
-      td.textContent = q ? 'No matching items.' : 'No inventory items yet.';
+      td.colSpan = isAdmin ? 8 : 7;
+      td.className = 'invEmpty muted';
+      td.textContent = q ? 'No matching items.' : 'No inventory items yet. Add your first item above.';
       tr.appendChild(td);
       els.tbody.appendChild(tr);
       return;
@@ -130,25 +134,51 @@
       const tr = document.createElement('tr');
 
       const tdName = document.createElement('td');
+      tdName.style.fontWeight = '600';
       tdName.textContent = it && it.name ? String(it.name) : '—';
 
       const tdCat = document.createElement('td');
-      tdCat.textContent = it && it.category ? String(it.category) : '—';
+      if (it && it.category) {
+        const badge = document.createElement('span');
+        badge.className = 'invCatBadge';
+        badge.textContent = String(it.category);
+        tdCat.appendChild(badge);
+      } else {
+        tdCat.textContent = '—';
+        tdCat.style.opacity = '0.35';
+      }
 
-      const tdLoc = document.createElement('td');
-      tdLoc.textContent = it && it.location ? String(it.location) : '—';
+      const tdRack = document.createElement('td');
+      tdRack.textContent = it && it.rack ? String(it.rack) : '—';
+      if (!it || !it.rack) tdRack.style.opacity = '0.35';
+
+      const tdShelf = document.createElement('td');
+      tdShelf.textContent = it && it.shelf ? String(it.shelf) : '—';
+      if (!it || !it.shelf) tdShelf.style.opacity = '0.35';
 
       const tdQty = document.createElement('td');
       tdQty.className = 'qty';
-      tdQty.textContent = it && it.quantity != null ? String(it.quantity) : '0';
+      const qtyBadge = document.createElement('span');
+      qtyBadge.className = 'invQtyBadge';
+      qtyBadge.textContent = it && it.quantity != null ? String(it.quantity) : '0';
+      tdQty.appendChild(qtyBadge);
+
+      const tdSerial = document.createElement('td');
+      tdSerial.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      tdSerial.style.fontSize = '12px';
+      tdSerial.textContent = it && it.serial_number ? String(it.serial_number) : '—';
+      if (!it || !it.serial_number) tdSerial.style.opacity = '0.35';
 
       const tdNotes = document.createElement('td');
       tdNotes.textContent = it && it.notes ? String(it.notes) : '—';
+      if (!it || !it.notes) tdNotes.style.opacity = '0.35';
 
       tr.appendChild(tdName);
       tr.appendChild(tdCat);
-      tr.appendChild(tdLoc);
+      tr.appendChild(tdRack);
+      tr.appendChild(tdShelf);
       tr.appendChild(tdQty);
+      tr.appendChild(tdSerial);
       tr.appendChild(tdNotes);
 
       if (isAdmin) {
@@ -161,7 +191,7 @@
         btn.addEventListener('click', async () => {
           const id = it && it.id != null ? String(it.id) : null;
           if (!id) return;
-          const ok = confirm(`Remove item #${id} (${it.name || 'item'})?`);
+          const ok = confirm(`Remove "${it.name || 'item'}"?`);
           if (!ok) return;
           try {
             setConn('removing…');
@@ -187,6 +217,14 @@
 
     try {
       els.count.textContent = String(items.length);
+      if (els.catCount) {
+        const cats = new Set(items.map(i => i.category).filter(Boolean));
+        els.catCount.textContent = String(cats.size);
+      }
+      if (els.locCount) {
+        const racks = new Set(items.map(i => i.rack).filter(Boolean));
+        els.locCount.textContent = String(racks.size);
+      }
       els.ref.textContent = fmtLocalTs(Date.now());
     } catch (_) {
       // ignore
@@ -227,7 +265,9 @@
 
         const name = els.name ? String(els.name.value || '').trim() : '';
         const category = els.category ? String(els.category.value || '').trim() : '';
-        const location = els.location ? String(els.location.value || '').trim() : '';
+        const rack = els.rack ? String(els.rack.value || '').trim() : '';
+        const shelf = els.shelf ? String(els.shelf.value || '').trim() : '';
+        const serial = els.serial ? String(els.serial.value || '').trim() : '';
         const notes = els.notes ? String(els.notes.value || '').trim() : '';
         const qtyRaw = els.qty ? String(els.qty.value || '').trim() : '1';
 
@@ -247,7 +287,9 @@
         const payload = {
           name,
           category: category || null,
-          location: location || null,
+          rack: rack || null,
+          shelf: shelf || null,
+          serial_number: serial || null,
           quantity,
           notes: notes || null,
         };
@@ -265,7 +307,9 @@
 
           if (els.name) els.name.value = '';
           if (els.category) els.category.value = '';
-          if (els.location) els.location.value = '';
+          if (els.rack) els.rack.value = '';
+          if (els.shelf) els.shelf.value = '';
+          if (els.serial) els.serial.value = '';
           if (els.qty) els.qty.value = '1';
           if (els.notes) els.notes.value = '';
 

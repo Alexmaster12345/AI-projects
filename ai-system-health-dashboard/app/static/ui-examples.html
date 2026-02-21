@@ -3,29 +3,70 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard UI Examples</title>
+    <title>System Trace · UI Examples</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260211_2" />
+    <script defer src="/static/assets/dashboard.js?v=20260211_2"></script>
     <style>
-      :root {
-        --bg: #0b1020;
-        --panel: rgba(255, 255, 255, 0.06);
-        --border: rgba(255, 255, 255, 0.10);
-        --text: rgba(255, 255, 255, 0.92);
-        --muted: rgba(255, 255, 255, 0.65);
-        --good: #3ddc97;
-        --warn: #ffcc00;
-        --crit: #ff4d4d;
-        --accent: #8ab4ff;
-        --shadow: 0 10px 40px rgba(0,0,0,0.25);
-        --glass: rgba(0,0,0,0.20);
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar {
+      transform: translateX(calc(-100% + 14px)) !important;
+      transition: transform 180ms ease !important;
+    }
+    body.sidebarAutoHide.sidebarHover .sidebar,
+    body.sidebarAutoHide.sidebarOpen .sidebar {
+      transform: translateX(0) !important;
+      transition: transform 180ms ease !important;
+    }
+    body.sidebarAutoHide .content {
+      margin-left: 14px !important;
+      transition: margin-left 180ms ease !important;
+    }
+    body.sidebarAutoHide.sidebarHover .content,
+    body.sidebarAutoHide.sidebarOpen .content {
+      margin-left: var(--side-w, 260px) !important;
+    }
+    </style>
+    <script>
+    (function() {
+      let sidebarHover = false;
+      function initAutoHide() {
+        const sidebar = document.getElementById('sidebar');
+        if (!sidebar) return;
+        document.body.classList.add('sidebarAutoHide');
+        document.addEventListener('mousemove', function(e) {
+          if (e.clientX <= 30) {
+            if (!sidebarHover) { sidebarHover = true; document.body.classList.add('sidebarHover'); }
+          } else if (e.clientX > 100) {
+            if (sidebarHover) { sidebarHover = false; document.body.classList.remove('sidebarHover'); }
+          }
+        });
+        sidebar.addEventListener('mouseenter', function() { sidebarHover = true; document.body.classList.add('sidebarHover'); });
+        sidebar.addEventListener('mouseleave', function() { sidebarHover = false; document.body.classList.remove('sidebarHover'); });
       }
-      body {
-        margin: 0;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        background:
-          radial-gradient(1200px 800px at 20% 10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent),
-          radial-gradient(900px 600px at 80% 20%, color-mix(in srgb, var(--good) 18%, transparent), transparent),
-          var(--bg);
-        color: var(--text);
+      if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initAutoHide); } else { initAutoHide(); }
+    })();
+    </script>
+    <style>
+      .examples-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .example-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .example-title {
+        color: var(--accent);
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+      .example-description {
+        color: var(--muted);
+        margin-bottom: 15px;
       }
       header {
         padding: 18px 20px;
@@ -122,10 +163,88 @@
       .small { font-size: 12px; color: var(--muted); }
     </style>
   </head>
-  <body>
-    <header>
-      <div>
-        <h1>Dashboard UI Examples</h1>
+  <body class="sidebarAutoHide">
+    <div class="appShell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">System Trace</div>
+          </div>
+
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/" data-action="dashboard" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="#" data-action="problems" data-label="Problems">Problems</a>
+            <a class="sideItem" href="/hosts" data-action="hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/overview" data-action="overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="#" data-action="latest" data-label="Latest data">Latest data</a>
+            <a class="sideItem" href="#" data-action="screens" data-label="Screens">Screens</a>
+            <a class="sideItem" href="#" data-action="maps" data-label="Maps">Maps</a>
+            <a class="sideItem" href="#" data-action="discovery" data-label="Discovery">Discovery</a>
+            <a class="sideItem" href="#" data-action="services" data-label="Services">Services</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Inventory</div>
+            <a class="sideItem" href="/inventory" data-action="inventory" data-label="Inventory">Inventory</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Reports</div>
+            <a class="sideItem" href="#" data-action="reports" data-label="Reports">Reports</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Configuration</div>
+            <a class="sideItem" href="#" data-action="configuration" data-label="Configuration">Configuration</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <a class="sideItem" href="/users" data-action="users" data-label="Users">Users</a>
+            <a class="sideItem" href="/user-groups" data-action="user-groups" data-label="User groups">User groups</a>
+          </div>
+        </nav>
+
+        <div class="sideBottom" aria-label="Secondary">
+          <a class="sideItem" href="#" data-action="support" data-label="Support">Support</a>
+          <a class="sideItem" href="#" data-action="share" data-label="Share">Share</a>
+          <a class="sideItem" href="#" data-action="help" data-label="Help">Help</a>
+          <a class="sideItem" href="#" data-action="settings" data-label="User settings">User settings</a>
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit" data-action="logout">Sign out</button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="content" id="content">
+        <div class="frame">
+          <div class="hud">
+            <header>
+              <div class="headLeft">
+                <button id="sideToggle" class="sideToggle" type="button" aria-label="Toggle menu" title="Menu">
+                  <span aria-hidden="true">≡</span>
+                </button>
+                <div>
+                  <div id="date" class="date">—</div>
+                  <div class="title">UI EXAMPLES</div>
+                </div>
+              </div>
+              <div class="badge"><span class="dot"></span><span id="conn">connecting…</span> · <span id="host">—</span></div>
+            </header>
+          </div>
+
+          <div class="examples-container">
+            <div class="example-card">
+              <div class="example-title">Dashboard UI Examples</div>
+              <div class="example-description">Explore various UI components and layouts available in the System Trace Dashboard</div>
+            </div>
         <div class="muted">Click a preset to open the main dashboard with URL params.</div>
       </div>
       <div class="row">
@@ -249,6 +368,9 @@
 # Accessibility high contrast
 /?theme=contrast&layout=stack&density=cozy
         </code>
+      </div>
+          </div>
+        </div>
       </div>
     </div>
   </body>

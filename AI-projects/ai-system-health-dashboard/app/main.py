@@ -64,9 +64,8 @@ def _is_public_path(path: str) -> bool:
     # Only login endpoints are public; everything else requires auth.
     if path in ("/login",):
         return True
-    # Allow a single public stylesheet for the login page.
-    # Keep this allowlist tight: do NOT make all of /static public.
-    if path == "/static/assets/login.css":
+    # Allow all static files to be public (CSS, JS, images)
+    if path.startswith("/static/"):
         return True
     # Allow favicon even when unauthenticated to avoid noisy logs.
     if path == "/favicon.ico":

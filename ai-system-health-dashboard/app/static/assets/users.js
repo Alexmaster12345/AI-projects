@@ -4,7 +4,6 @@
 
   // Elements
   const els = {
-    conn: $('usersConn'),
     user: $('usersUser'),
     err: $('usersErr'),
     usersTableBody: $('usersTableBody'),
@@ -73,8 +72,10 @@
   // User Management Functions
   async function loadUsers() {
     try {
+      console.log('Loading users from API...');
       els.usersTableBody.innerHTML = '<tr><td colspan="7" class="textCenter muted">Loading users...</td></tr>';
       users = await fetchJson('/api/admin/users');
+      console.log('Users loaded:', users);
       renderUsers();
     } catch (error) {
       console.error('Failed to load users:', error);
@@ -124,17 +125,19 @@
 
   async function loadCurrentUser() {
     try {
+      console.log('Loading current user from API...');
       currentUser = await fetchJson('/api/me');
+      console.log('Current user loaded:', currentUser);
       const usernameEl = document.getElementById('usersUsername');
       if (usernameEl) {
         setText(usernameEl, currentUser && currentUser.username ? currentUser.username : '—');
-      } else {
-        setText(els.user, currentUser && currentUser.username ? currentUser.username : '—');
       }
     } catch (error) {
       console.error('Failed to load current user:', error);
-      currentUser = null;
-      setText(els.user, '—');
+      const usernameEl = document.getElementById('usersUsername');
+      if (usernameEl) {
+        setText(usernameEl, '—');
+      }
     }
   }
 
@@ -304,19 +307,19 @@
 
   // Initialize
   async function init() {
-    els.conn.textContent = 'loading…';
+    console.log('Users page initializing...');
     setupSidebarSearch();
     setupEventListeners();
 
     try {
+      console.log('Loading current user and users...');
       await Promise.all([
         loadCurrentUser(),
         loadUsers()
       ]);
-      els.conn.textContent = 'ready';
+      console.log('Users page loaded successfully');
     } catch (error) {
       console.error('Failed to initialize users page:', error);
-      els.conn.textContent = 'error';
       showErr('Failed to initialize users page');
     }
   }

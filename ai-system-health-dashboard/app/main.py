@@ -9,6 +9,7 @@ import socket
 import subprocess
 import time
 from html import escape
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
@@ -31,6 +32,7 @@ from .storage import get_inventory_items as db_get_inventory_items
 from .storage import get_latest as db_get_latest
 from .storage import get_stats as db_get_stats
 from .storage import deactivate_host as db_deactivate_host
+from .storage import update_host as db_update_host
 from .storage import delete_inventory_item as db_delete_inventory_item
 from .storage import init_storage
 from .storage import persist_sample
@@ -76,6 +78,9 @@ def _is_public_path(path: str) -> bool:
         return True
     # User management pages (they handle their own auth)
     if path in ("/users", "/user-groups"):
+        return True
+    # Allow agent metrics endpoint for auto-discovery
+    if path == "/api/agent/metrics":
         return True
     return False
 
@@ -564,6 +569,171 @@ async def api_admin_inventory_create(payload: InventoryItemCreate) -> Any:
     return item.model_dump()
 
 
+@app.put("/api/admin/hosts/{host_id}")
+async def api_admin_hosts_update(host_id: int, payload: HostCreate) -> Any:
+    if not storage.enabled:
+        return JSONResponse({"detail": "Host storage is disabled"}, status_code=503)
+    host = await db_update_host(int(host_id), payload)
+    if not host:
+        return JSONResponse({"detail": "Not found"}, status_code=404)
+    return host.model_dump()
+
+
+@app.post("/api/admin/hosts/{host_id}/install-agent")
+async def api_admin_hosts_install_agent(host_id: int, payload: dict) -> Any:
+    import asyncio, tempfile, os
+    hosts = await db_get_hosts(active_only=False)
+    host = next((h for h in hosts if h.id == int(host_id)), None)
+    if not host:
+        return JSONResponse({"detail": "Host not found"}, status_code=404)
+
+    ssh_user = str(payload.get("ssh_user", "root")).strip()
+    ssh_pass = str(payload.get("ssh_password", "")).strip()
+    ssh_port = int(payload.get("ssh_port", 22))
+    server_url = str(payload.get("server_url", "http://192.168.50.225:8001")).strip()
+    target_ip = host.address
+
+    agent_src = "/opt/system-trace-agent/ashd_agent.py"
+    if not os.path.exists(agent_src):
+        return JSONResponse({"detail": "Agent file not found on server"}, status_code=500)
+
+    # Read agent file content to embed directly (avoids heredoc issues with $)
+    try:
+        with open(agent_src, 'r') as f:
+            agent_content = f.read()
+        # Escape single quotes for safe embedding
+        agent_content_escaped = agent_content.replace("'", "'\\''")
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to read agent file: {e}"}, status_code=500)
+
+    # Use sudo only if not root
+    if ssh_user == "root":
+        priv = ""
+    else:
+        priv = f"echo '{ssh_pass}' | sudo -S"
+
+    install_script = f"""#!/bin/bash
+set -e
+
+# --- Install monitoring agent ---
+{priv} mkdir -p /opt/system-trace-agent
+cat > /tmp/_ashd_agent.py << 'AGENTEOF'
+{agent_content_escaped}
+AGENTEOF
+{priv} cp /tmp/_ashd_agent.py /opt/system-trace-agent/ashd_agent.py
+{priv} sed -i 's|http://192.168.50.225:8001|{server_url}|g' /opt/system-trace-agent/ashd_agent.py
+python3 -m pip install psutil requests --quiet 2>/dev/null || pip3 install psutil requests --quiet 2>/dev/null || true
+
+cat > /tmp/_ashd.service << 'SVCEOF'
+[Unit]
+Description=System Trace Monitoring Agent
+After=network.target
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/system-trace-agent/ashd_agent.py
+Restart=always
+RestartSec=30
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+{priv} cp /tmp/_ashd.service /etc/systemd/system/system-trace-agent.service
+{priv} systemctl daemon-reload
+{priv} systemctl enable system-trace-agent
+{priv} systemctl restart system-trace-agent
+
+# --- Install and configure SNMP (net-snmp) ---
+if command -v dnf &>/dev/null; then
+    {priv} dnf install -y net-snmp net-snmp-utils 2>/dev/null || true
+elif command -v yum &>/dev/null; then
+    {priv} yum install -y net-snmp net-snmp-utils 2>/dev/null || true
+elif command -v apt-get &>/dev/null; then
+    {priv} apt-get install -y snmpd snmp 2>/dev/null || true
+fi
+
+# Write minimal snmpd.conf allowing public community
+cat > /tmp/_snmpd.conf << 'SNMPEOF'
+agentAddress udp:161
+rocommunity public default
+syslocation "Monitored Host"
+syscontact admin@localhost
+SNMPEOF
+{priv} cp /tmp/_snmpd.conf /etc/snmp/snmpd.conf 2>/dev/null || true
+{priv} systemctl enable snmpd 2>/dev/null || true
+{priv} systemctl restart snmpd 2>/dev/null || true
+
+# Open SNMP port in firewall if firewalld is active
+if {priv} systemctl is-active --quiet firewalld 2>/dev/null; then
+    {priv} firewall-cmd --permanent --add-port=161/udp 2>/dev/null || true
+    {priv} firewall-cmd --reload 2>/dev/null || true
+fi
+
+# --- Install and configure chrony (NTP) ---
+if command -v dnf &>/dev/null; then
+    {priv} dnf install -y chrony 2>/dev/null || true
+elif command -v yum &>/dev/null; then
+    {priv} yum install -y chrony 2>/dev/null || true
+elif command -v apt-get &>/dev/null; then
+    {priv} apt-get install -y chrony 2>/dev/null || true
+fi
+{priv} systemctl enable chronyd 2>/dev/null || systemctl enable chrony 2>/dev/null || true
+{priv} systemctl restart chronyd 2>/dev/null || systemctl restart chrony 2>/dev/null || true
+
+echo "Agent, SNMP and NTP installed successfully"
+echo "REAL_HOSTNAME=$(hostname -f 2>/dev/null || hostname)"
+"""
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "sshpass", "-p", ssh_pass,
+            "ssh",
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=10",
+            "-p", str(ssh_port),
+            f"{ssh_user}@{target_ip}",
+            "bash -s",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(input=install_script.encode()), timeout=120)
+        if proc.returncode != 0:
+            return JSONResponse({"detail": stderr.decode() or "Install failed"}, status_code=500)
+
+        output = stdout.decode()
+
+        # Parse real hostname from install script output
+        real_hostname = None
+        for line in output.splitlines():
+            if line.startswith("REAL_HOSTNAME="):
+                real_hostname = line.split("=", 1)[1].strip()
+                break
+
+        # Update host name in DB with real hostname
+        if real_hostname and real_hostname not in ("", "localhost", "localhost.localdomain"):
+            try:
+                from app.models import HostCreate as HC
+                existing_host = next((h for h in hosts if h.id == int(host_id)), None)
+                if existing_host:
+                    await db_update_host(int(host_id), HC(
+                        name=real_hostname,
+                        address=existing_host.address,
+                        type=existing_host.type or "linux",
+                        tags=existing_host.tags or [],
+                        notes=existing_host.notes,
+                    ))
+            except Exception:
+                pass
+
+        msg = f"Agent installed on {real_hostname or target_ip} successfully"
+        return {"ok": True, "message": msg, "hostname": real_hostname or target_ip}
+    except asyncio.TimeoutError:
+        return JSONResponse({"detail": "SSH connection timed out"}, status_code=504)
+    except FileNotFoundError:
+        return JSONResponse({"detail": "sshpass not installed on server. Run: sudo dnf install sshpass"}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
+
 @app.delete("/api/admin/hosts/{host_id}")
 async def api_admin_hosts_delete(host_id: int) -> Any:
     if not storage.enabled:
@@ -726,14 +896,14 @@ def _check_snmp_host(address: str) -> ProtocolStatus:
     # Use snmpwalk for SNMP checks
     import subprocess  # type: ignore
 
-    timeout = float(getattr(settings, "snmp_timeout_seconds", 1.2) or 1.2)
+    timeout = float(getattr(settings, "snmp_timeout_seconds", 2.0) or 2.0)
     try:
         t0 = time.perf_counter()
-        
-        # Use snmpwalk command for SNMP check
-        cmd = ['snmpwalk', '-v2c', '-c', community, '-t', str(int(timeout)), '-r', '1', 
-               f'{host}:{port}', '1.3.6.1.2.1.1.1.0']  # sysDescr.0
-        
+
+        # Use snmpget for a single OID — faster than snmpwalk
+        cmd = ['snmpget', '-v2c', '-c', community, '-t', str(int(timeout)), '-r', '1',
+               f'{host}:{port}', '1.3.6.1.2.1.1.3.0']  # sysUpTime.0
+
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout+2)
         
         t1 = time.perf_counter()
@@ -743,15 +913,16 @@ def _check_snmp_host(address: str) -> ProtocolStatus:
             return ProtocolStatus(status="ok", checked_ts=ts, latency_ms=latency_ms, message=f"{host}:{port}")
         else:
             error_msg = result.stderr.strip() or result.stdout.strip()
-            if "Timeout" in error_msg:
-                return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message="SNMP timeout")
+            # Timeout or no response = host simply doesn't run snmpd, not a critical failure
+            if "Timeout" in error_msg or "No Response" in error_msg or not error_msg:
+                return ProtocolStatus(status="unknown", checked_ts=ts, latency_ms=latency_ms, message="SNMP not available")
             else:
-                return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message=f"SNMP failed: {error_msg}")
-                
+                return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=latency_ms, message=f"SNMP: {error_msg[:80]}")
+
     except subprocess.TimeoutExpired:
-        return ProtocolStatus(status="crit", checked_ts=ts, latency_ms=timeout*1000, message="SNMP timeout")
+        return ProtocolStatus(status="unknown", checked_ts=ts, message="SNMP not available")
     except Exception as e:
-        return ProtocolStatus(status="crit", checked_ts=ts, message=f"SNMP failed: {e}")
+        return ProtocolStatus(status="unknown", checked_ts=ts, message=f"SNMP: {e}")
 
 
 def _check_ntp_server(address: str) -> ProtocolStatus:
@@ -1146,6 +1317,11 @@ class UserGroupCreate(BaseModel):
     description: Optional[str] = None
     allowed_hosts: Optional[list[str]] = []
 
+class UserGroupUpdate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    allowed_hosts: Optional[list[str]] = []
+
 @app.get("/api/admin/users")
 async def api_get_users(request: Request) -> Any:
     """Get all users (admin only)."""
@@ -1280,12 +1456,436 @@ async def api_create_user_group(group_in: UserGroupCreate, request: Request) -> 
     except Exception as e:
         return JSONResponse({"detail": f"Failed to create user group: {str(e)}"}, status_code=400)
 
+@app.put("/api/admin/user-groups/{group_id}")
+async def api_update_user_group(group_id: int, group_in: UserGroupUpdate, request: Request) -> Any:
+    """Update an existing user group (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    
+    try:
+        await asyncio.to_thread(
+            auth_storage.update_user_group,
+            group_id=group_id,
+            name=group_in.name,
+            description=group_in.description,
+            allowed_hosts=group_in.allowed_hosts
+        )
+        return {"id": group_id, "name": group_in.name, "description": group_in.description, "allowed_hosts": group_in.allowed_hosts}
+    except Exception as e:
+        return JSONResponse({"detail": f"Failed to update user group: {str(e)}"}, status_code=400)
+
+# === System Logs ===
+
+LOGS_FILE = Path('data/system_logs.json')
+MAX_LOGS = 2000  # rolling cap
+
+def _read_logs() -> list:
+    try:
+        if LOGS_FILE.exists():
+            with open(LOGS_FILE, 'r') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return []
+
+def _write_logs(logs: list) -> None:
+    LOGS_FILE.parent.mkdir(exist_ok=True)
+    with open(LOGS_FILE, 'w') as f:
+        json.dump(logs[-MAX_LOGS:], f)
+
+def write_log(level: str, source: str, message: str, hostname: str = '', ip: str = '') -> None:
+    """Append one entry to system_logs.json (non-blocking best-effort)."""
+    try:
+        logs = _read_logs()
+        logs.append({
+            'ts': time.time(),
+            'level': level,       # 'info' | 'warn' | 'error' | 'crit'
+            'source': source,
+            'hostname': hostname,
+            'ip': ip,
+            'message': message,
+        })
+        _write_logs(logs)
+    except Exception as e:
+        print(f"[log write error] {e}")
+
+@app.get("/api/logs")
+async def get_logs(limit: int = 200, level: str = '', hostname: str = '') -> Any:
+    """Return recent system log entries, newest first."""
+    try:
+        logs = _read_logs()
+        if level:
+            logs = [l for l in logs if l.get('level') == level]
+        if hostname:
+            logs = [l for l in logs if l.get('hostname') == hostname]
+        return {"logs": list(reversed(logs[-limit:]))}
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
+@app.post("/api/logs")
+async def post_log(entry: dict) -> Any:
+    """Accept a log entry from the frontend."""
+    try:
+        write_log(
+            level=str(entry.get('level', 'info')),
+            source=str(entry.get('source', 'frontend')),
+            message=str(entry.get('message', '')),
+            hostname=str(entry.get('hostname', '')),
+            ip=str(entry.get('ip', '')),
+        )
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
+@app.delete("/api/logs")
+async def clear_logs() -> Any:
+    """Clear all system logs (admin)."""
+    try:
+        _write_logs([])
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
+@app.get("/api/logs/host/{hostname}")
+async def get_host_logs(hostname: str, limit: int = 100) -> Any:
+    """Return log entries for a specific host, newest first."""
+    try:
+        logs = _read_logs()
+        filtered = [l for l in logs if l.get('hostname') == hostname]
+        return {"logs": list(reversed(filtered[-limit:]))}
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
+# === Agent Management API ===
+
+@app.post("/api/agent/metrics")
+async def receive_agent_metrics(metrics: dict, request: Request) -> Any:
+    """Receive metrics from monitoring agents."""
+    try:
+        # Extract hostname from metrics
+        hostname = metrics.get('hostname', 'unknown')
+        agent_id = metrics.get('agent_id', 'unknown')
+        os_type = metrics.get('os_type', 'unknown')
+        # IP: prefer what agent reports, fall back to request source IP
+        ip = metrics.get('ip') or request.client.host
+
+        # Log the received metrics with hostname
+        print(f"Received metrics from agent: {hostname} ({agent_id}) IP: {ip} - OS: {os_type}")
+        
+        # Store metrics in a file for now (in production, use database)
+        metrics_file = Path('data/agent_metrics.json')
+        metrics_file.parent.mkdir(exist_ok=True)
+        
+        # Read existing metrics or create new structure
+        if metrics_file.exists():
+            with open(metrics_file, 'r') as f:
+                all_metrics = json.load(f)
+        else:
+            all_metrics = {}
+        
+        # Keep rolling history (last 400 samples = ~20 min at 3s interval)
+        MAX_HISTORY = 400
+        existing = all_metrics.get(hostname, {})
+        history = existing.get('history', [])
+        history.append({
+            'ts': time.time(),
+            'cpu': metrics.get('cpu', {}).get('percent', 0),
+            'mem': metrics.get('memory', {}).get('percent', 0),
+            'disk': metrics.get('disk', {}).get('percent', 0),
+            'net_sent': metrics.get('network', {}).get('bytes_sent', 0),
+            'net_recv': metrics.get('network', {}).get('bytes_recv', 0),
+            'processes': metrics.get('processes', 0),
+            'uptime': metrics.get('uptime', 0),
+            'gpu': metrics.get('gpu') or [],
+        })
+        if len(history) > MAX_HISTORY:
+            history = history[-MAX_HISTORY:]
+
+        # Store metrics with hostname as key
+        all_metrics[hostname] = {
+            'last_seen': time.time(),
+            'hostname': hostname,
+            'ip': ip,
+            'agent_id': agent_id,
+            'os_type': os_type,
+            'metrics': metrics,
+            'history': history,
+            'discovered_at': existing.get('discovered_at', time.time())
+        }
+        
+        # Save updated metrics
+        with open(metrics_file, 'w') as f:
+            json.dump(all_metrics, f, indent=2)
+
+        # Auto-log threshold breaches (only log every ~30s per host to avoid spam)
+        cpu_pct  = metrics.get('cpu', {}).get('percent', 0)
+        mem_pct  = metrics.get('memory', {}).get('percent', 0)
+        disk_pct = metrics.get('disk', {}).get('percent', 0)
+        prev_log_ts = existing.get('last_problem_log_ts', 0)
+        now_ts = time.time()
+        if now_ts - prev_log_ts >= 30:
+            problems = []
+            if cpu_pct >= 90:
+                problems.append(f"CPU critical: {cpu_pct:.1f}%")
+            elif cpu_pct >= 75:
+                problems.append(f"CPU high: {cpu_pct:.1f}%")
+            if mem_pct >= 90:
+                problems.append(f"RAM critical: {mem_pct:.1f}%")
+            elif mem_pct >= 80:
+                problems.append(f"RAM high: {mem_pct:.1f}%")
+            if disk_pct >= 95:
+                problems.append(f"Disk critical: {disk_pct:.1f}%")
+            elif disk_pct >= 85:
+                problems.append(f"Disk high: {disk_pct:.1f}%")
+            gpu_list = metrics.get('gpu') or []
+            if isinstance(gpu_list, list):
+                for g in gpu_list:
+                    gidx = g.get('index', 0)
+                    gpct = g.get('percent', 0)
+                    gtemp = g.get('temperature')
+                    if gpct >= 95:
+                        problems.append(f"GPU {gidx} critical: {gpct:.1f}%")
+                    elif gpct >= 85:
+                        problems.append(f"GPU {gidx} high: {gpct:.1f}%")
+                    if gtemp is not None:
+                        if gtemp >= 90:
+                            problems.append(f"GPU {gidx} temp critical: {gtemp:.0f}°C")
+                        elif gtemp >= 80:
+                            problems.append(f"GPU {gidx} temp high: {gtemp:.0f}°C")
+            if problems:
+                level = 'crit' if any('critical' in p for p in problems) else 'warn'
+                write_log(level=level, source='agent', hostname=hostname, ip=ip,
+                          message='; '.join(problems))
+                all_metrics[hostname]['last_problem_log_ts'] = now_ts
+                with open(metrics_file, 'w') as f:
+                    json.dump(all_metrics, f, indent=2)
+
+        return {"status": "success", "message": f"Metrics received from {hostname}"}
+    
+    except Exception as e:
+        print(f"Error processing agent metrics: {e}")
+        return JSONResponse({"detail": f"Failed to process metrics: {str(e)}"}, status_code=500)
+
+@app.get("/api/hosts/{host_id}/agent-metrics")
+async def get_host_agent_metrics(host_id: int) -> Any:
+    """Return latest snapshot + history for a specific host by ID."""
+    try:
+        hosts = await db_get_hosts(active_only=False)
+        host = next((h for h in hosts if h.id == int(host_id)), None)
+        if not host:
+            return JSONResponse({"detail": "Host not found"}, status_code=404)
+
+        metrics_file = Path('data/agent_metrics.json')
+        if not metrics_file.exists():
+            return {"found": False}
+        with open(metrics_file, 'r') as f:
+            all_metrics = json.load(f)
+
+        # Match by IP or hostname
+        address = str(host.address or "").strip()
+        name = str(host.name or "").strip()
+        data = None
+        for entry in all_metrics.values():
+            if entry.get('ip') == address or entry.get('hostname') == name or entry.get('hostname') == address:
+                data = entry
+                break
+
+        if not data:
+            return {"found": False}
+
+        now = time.time()
+        online = (now - data.get('last_seen', 0)) < 120
+        latest = data.get('metrics', {})
+        history = data.get('history', [])
+
+        # Compute network delta (bytes/s) from last 2 history points
+        net_sent_rate = 0
+        net_recv_rate = 0
+        if len(history) >= 2:
+            h1, h2 = history[-2], history[-1]
+            dt = max(h2['ts'] - h1['ts'], 1)
+            net_sent_rate = max(0, (h2['net_sent'] - h1['net_sent']) / dt)
+            net_recv_rate = max(0, (h2['net_recv'] - h1['net_recv']) / dt)
+
+        return {
+            "found": True,
+            "online": online,
+            "last_seen": data.get('last_seen'),
+            "hostname": data.get('hostname'),
+            "ip": data.get('ip'),
+            "os_type": data.get('os_type'),
+            "latest": {
+                "cpu": latest.get('cpu', {}),
+                "memory": latest.get('memory', {}),
+                "disk": latest.get('disk', {}),
+                "network": latest.get('network', {}),
+                "uptime": latest.get('uptime', 0),
+                "processes": latest.get('processes', 0),
+                "gpu": latest.get('gpu'),
+            },
+            "net_sent_rate": round(net_sent_rate),
+            "net_recv_rate": round(net_recv_rate),
+            "history": history,
+        }
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
+
+@app.get("/api/agent/status")
+async def get_agent_status() -> Any:
+    """Return agent online/offline status keyed by IP address and hostname."""
+    try:
+        metrics_file = Path('data/agent_metrics.json')
+        if not metrics_file.exists():
+            return {}
+        with open(metrics_file, 'r') as f:
+            all_metrics = json.load(f)
+        now = time.time()
+        result = {}
+        for hostname, data in all_metrics.items():
+            last_seen = data.get('last_seen', 0)
+            online = (now - last_seen) < 120
+            ip = data.get('ip') or data.get('metrics', {}).get('ip')
+            entry = {
+                'hostname': hostname,
+                'last_seen': last_seen,
+                'status': 'online' if online else 'offline',
+            }
+            # Index by hostname
+            result[hostname] = entry
+            # Also index by IP if available
+            if ip:
+                result[ip] = entry
+        return result
+    except Exception as e:
+        return {}
+
+
+@app.get("/api/agent/metrics")
+async def get_agent_metrics() -> Any:
+    """Get all agent metrics."""
+    try:
+        metrics_file = Path('data/agent_metrics.json')
+        if not metrics_file.exists():
+            return {"agents": []}
+        
+        with open(metrics_file, 'r') as f:
+            all_metrics = json.load(f)
+        
+        # Return list of agents with their latest metrics
+        agents = []
+        for hostname, data in all_metrics.items():
+            agents.append({
+                'hostname': hostname,
+                'agent_id': data.get('agent_id'),
+                'os_type': data.get('os_type'),
+                'last_seen': data.get('last_seen'),
+                'discovered_at': data.get('discovered_at'),
+                'status': 'online' if (time.time() - data.get('last_seen', 0)) < 120 else 'offline'
+            })
+        
+        return {"agents": agents}
+    
+    except Exception as e:
+        print(f"Error getting agent metrics: {e}")
+        return JSONResponse({"detail": f"Failed to get metrics: {str(e)}"}, status_code=500)
+
+# === Discovery API ===
+
+@app.post("/api/discovery/start")
+async def start_discovery() -> Any:
+    """Scan network, discover hosts, and save new ones to the database."""
+    import asyncio, re, socket
+
+    network = "192.168.50.0/24"
+    server_ip = "192.168.50.225"
+
+    async def run(cmd):
+        proc = await asyncio.create_subprocess_shell(
+            cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=90)
+        return stdout.decode()
+
+    async def ping_host(ip):
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                f"ping -c 1 -W 1 {ip}",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(proc.wait(), timeout=3)
+            return proc.returncode == 0
+        except Exception:
+            return False
+
+    # nmap ping scan
+    nmap_ips = set()
+    try:
+        output = await run(f"nmap -sn --host-timeout 3s {network}")
+        nmap_ips = set(re.findall(r'Nmap scan report for (?:\S+ \()?(\d+\.\d+\.\d+\.\d+)\)?', output))
+    except Exception:
+        pass
+
+    # Parallel ping sweep for the full /24 (catches hosts nmap misses)
+    import ipaddress
+    all_ips = [str(ip) for ip in ipaddress.ip_network(network, strict=False).hosts()
+               if not str(ip).endswith('.255')]
+    ping_tasks = [ping_host(ip) for ip in all_ips]
+    ping_results = await asyncio.gather(*ping_tasks)
+    ping_ips = {ip for ip, alive in zip(all_ips, ping_results) if alive}
+
+    # Combine both sets, exclude server itself
+    found_ips = sorted((nmap_ips | ping_ips) - {server_ip})
+
+    if not found_ips:
+        return {"status": "done", "message": "No hosts found on network", "added": 0, "found": 0}
+
+    # Get existing active hosts to avoid duplicates
+    existing = await db_get_hosts(active_only=True)
+    existing_addresses = {h.address for h in existing}
+
+    added = []
+    for ip in found_ips:
+        if ip in existing_addresses:
+            continue
+        try:
+            hostname = socket.gethostbyaddr(ip)[0]
+        except Exception:
+            hostname = f"host-{ip.split('.')[-1]}"
+
+        try:
+            from app.models import HostCreate as HC
+            await db_create_host(HC(name=hostname, address=ip, type="linux", tags=[], notes=None))
+            added.append(ip)
+        except Exception:
+            pass
+
+    return {
+        "status": "done",
+        "message": f"Discovery complete. Found {len(found_ips)} hosts, added {len(added)} new.",
+        "found": len(found_ips),
+        "added": len(added),
+        "new_hosts": added,
+    }
+
 # === Routes for User Management Pages ===
+
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_page(request: Request):
+    """Serve the system logs page."""
+    return FileResponse("app/static/logs.html")
 
 @app.get("/hosts", response_class=HTMLResponse)
 async def hosts_page(request: Request):
     """Serve the hosts management page."""
     return FileResponse("app/static/hosts.html")
+
+@app.get("/maps", response_class=HTMLResponse)
+async def maps_page(request: Request):
+    """Serve the network maps page."""
+    return FileResponse("app/static/maps.html")
 
 @app.get("/users", response_class=HTMLResponse)
 async def users_page(request: Request):
