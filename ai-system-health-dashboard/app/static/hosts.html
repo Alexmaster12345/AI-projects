@@ -603,55 +603,15 @@
           });
       }
       
-      async function startAutoDiscovery() {
-          const btn = document.getElementById('autoDiscoverIcon');
-          const originalText = btn.innerHTML;
-          
-          try {
-              // Disable button and show loading state
-              btn.disabled = true;
-              btn.innerHTML = '⏳ Discovering...';
-              btn.style.background = '#6c757d';
-              
-              // Call the discovery API
-              const response = await fetch('/api/discovery/start', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'same-origin'
-              });
-              
-              if (response.ok) {
-                  const result = await response.json();
-                  const msg = result.message || 'Discovery complete';
-                  btn.innerHTML = '✅ ' + msg;
-                  btn.style.background = '#28a745';
-              } else {
-                  throw new Error('Discovery failed');
-              }
-          } catch (error) {
-              console.error('Discovery error:', error);
-              btn.innerHTML = '❌ Error';
-              btn.style.background = '#dc3545';
-          } finally {
-              // Always refresh the host grid and reset button
-              loadHosts();
-              setTimeout(() => {
-                  btn.disabled = false;
-                  btn.innerHTML = originalText;
-                  btn.style.background = '';
-              }, 2500);
-          }
-      }
-      
       const DEVICE_ICONS = {
-        'rack-server': '🖥️', 'switch': '🔀', 'router': '🌐',
-        'firewall': '🛡️', 'patch-panel': '🔌', 'linux': '🐧',
-        'windows': '🪟', 'network': '📡', 'other': '💻'
+        'rack-server':'🖥️','switch':'🔀','router':'🌐',
+        'firewall':'🛡️','patch-panel':'��','linux':'🐧',
+        'windows':'🪟','network':'📡','other':'💻'
       };
 
       async function loadHosts() {
         const grid = document.getElementById('hostsGrid');
-        if (!grid) return;
+        if (!grid) { console.error('hostsGrid not found'); return; }
         try {
           const [hosts, agentStatus] = await Promise.all([
             fetch('/api/hosts', {credentials:'same-origin'}).then(r => r.ok ? r.json() : []),
@@ -671,9 +631,10 @@
                   ? '<span style="background:rgba(76,175,80,0.15);color:#4caf50;border:1px solid rgba(76,175,80,0.4);padding:2px 8px;border-radius:10px;font-size:11px;">● Online</span>'
                   : '<span style="background:rgba(158,158,158,0.15);color:#9e9e9e;border:1px solid rgba(158,158,158,0.4);padding:2px 8px;border-radius:10px;font-size:11px;">● Offline</span>')
               : '<span style="background:rgba(244,67,54,0.12);color:#f44336;border:1px solid rgba(244,67,54,0.35);padding:2px 8px;border-radius:10px;font-size:11px;">✕ No Agent</span>';
+            const safeName = (h.name||h.address||'').replace(/'/g,"&#39;");
             return `<div class="host-card" data-host-id="${h.id}">
               <div class="host-header">
-                <div class="host-ip">${icon} ${h.name || h.address}</div>
+                <div class="host-ip">${icon} ${h.name||h.address}</div>
                 <div style="display:flex;align-items:center;gap:6px;">
                   ${agentBadge}
                   <button class="edit-btn" onclick="openEditModal(this)"
@@ -689,46 +650,73 @@
               </div>
               <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
                 <a href="/host/${h.id}" class="deploy-btn" style="text-decoration:none;display:inline-block;padding:6px 14px;font-size:12px;">📊 Monitor</a>
-                <button class="deploy-btn" style="background:#c0392b;" onclick="deleteHost(${h.id}, '${(h.name||h.address).replace(/'/g,'')}')">🗑️ Delete</button>
+                <button class="deploy-btn" style="background:#c0392b;" onclick="window.deleteHost(${h.id},'${safeName}')">🗑️ Delete</button>
               </div>
             </div>`;
           }).join('');
         } catch(e) {
           console.error('loadHosts error:', e);
-          grid.innerHTML = `<div style="color:#f44336;padding:20px;grid-column:1/-1;">Failed to load hosts: ${e.message || e}</div>`;
+          grid.innerHTML = '<div style="color:#f44336;padding:20px;grid-column:1/-1;">Failed to load hosts: ' + (e.message||e) + '</div>';
+        }
+      }
+
+      async function refreshHosts() {
+        const btn = document.getElementById('refreshIcon');
+        const orig = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Refreshing...'; }
+        await loadHosts();
+        if (btn) {
+          btn.innerHTML = '✅ Done';
+          setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; }, 1500);
         }
       }
 
       async function deleteHost(id, name) {
         if (!confirm('Delete host: ' + name + '?')) return;
-        await fetch('/api/admin/hosts/' + id, { method: 'DELETE' });
-        loadHosts();
+        await fetch('/api/admin/hosts/' + id, { method: 'DELETE', credentials: 'same-origin' });
+        await loadHosts();
       }
 
-      async function refreshHosts() {
-        const btn = document.getElementById('refreshIcon');
-        const orig = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '⏳ Refreshing...';
+      async function startAutoDiscovery() {
+        const btn = document.getElementById('autoDiscoverIcon');
+        const orig = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Discovering...'; btn.style.background = '#6c757d'; }
         try {
-          await loadHosts();
-          btn.innerHTML = '✅ Done';
-          setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; }, 1500);
+          const response = await fetch('/api/discovery/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+          });
+          const result = await response.json();
+          if (response.ok) {
+            if (btn) { btn.innerHTML = '✅ ' + (result.message || 'Done'); btn.style.background = '#28a745'; }
+          } else {
+            if (btn) { btn.innerHTML = '❌ Failed'; btn.style.background = '#dc3545'; }
+          }
         } catch(e) {
-          btn.innerHTML = '❌ Error';
-          setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; }, 2000);
+          console.error('Discovery error:', e);
+          if (btn) { btn.innerHTML = '❌ Error'; btn.style.background = '#dc3545'; }
+        }
+        // Always refresh grid after discovery
+        await loadHosts();
+        if (btn) {
+          setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; btn.style.background = ''; }, 2500);
         }
       }
 
-      // Initial load
-      document.addEventListener('DOMContentLoaded', loadHosts);
-
-      // Expose to global scope for onclick handlers
-      window.refreshHosts = refreshHosts;
+      // Expose globals
       window.loadHosts = loadHosts;
+      window.refreshHosts = refreshHosts;
       window.deleteHost = deleteHost;
-      window.openEditModal = openEditModal;
       window.startAutoDiscovery = startAutoDiscovery;
+      window.openEditModal = openEditModal;
+
+      // Load on page ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadHosts);
+      } else {
+        loadHosts();
+      }
     </script>
   </body>
 </html>
