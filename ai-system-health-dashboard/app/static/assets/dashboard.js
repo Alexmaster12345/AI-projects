@@ -33,7 +33,14 @@
   function initRoleSidebar() {
     fetch('/api/me')
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) { if (data && data.role) applyRoleSidebar(data.role); })
+      .then(function (data) {
+        if (!data) return;
+        if (data.role) applyRoleSidebar(data.role);
+        if (data.username) {
+          var el = document.getElementById('dashUser');
+          if (el) el.textContent = '👤 ' + data.username + ' (' + data.role + ')';
+        }
+      })
       .catch(function () {});
   }
 
