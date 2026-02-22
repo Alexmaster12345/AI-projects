@@ -283,8 +283,7 @@ python scripts/auto_discover_hosts.py
 
 #### 2. Deploy Non-Root Agent (Recommended)
 ```bash
-# Deploy to centos-docker (192.168.50.198)
-./deploy_non_root_centos_docker.sh
+bash scripts/deploy/deploy_non_root_centos_docker.sh
 ```
 
 #### 3. Access Hosts Management
@@ -369,16 +368,61 @@ sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/s
 
 ### Documentation
 
-- **Agent Deployment Guide**: `AGENT_DEPLOYMENT_GUIDE.md`
-- **Non-Root Deployment**: `NON_ROOT_DEPLOYMENT_GUIDE.md`
-- **Network Monitoring**: `docs/NETWORK_MONITORING_GUIDE.md`
-- **SNMP Configuration**: `docs/SNMP_CONFIGURATION.md`
-- **Auto-Discovery Summary**: `auto_discovery_summary.md`
+- **Agent Deployment Guide**: `docs/guides/AGENT_DEPLOYMENT_GUIDE.md`
+- **Non-Root Deployment**: `docs/guides/NON_ROOT_DEPLOYMENT_GUIDE.md`
+- **Network Monitoring**: `docs/guides/NETWORK_MONITORING_GUIDE.md`
+- **SNMP Configuration**: `docs/guides/SNMP_CONFIGURATION.md`
+- **CentOS/Docker Deployment**: `docs/guides/CENTOS_DOCKER_DEPLOYMENT.md`
 
 ### Scripts Available
 
-- `scripts/auto_discover_hosts.py` - Network discovery
-- `scripts/deploy_agents_non_root.py` - Non-root deployment
-- `scripts/quick_deploy_agent.py` - Quick deployment
-- `scripts/setup_snmp.py` - SNMP configuration
-- `scripts/test_snmp_devices.py` - SNMP testing
+| Script | Purpose |
+|--------|---------|
+| `scripts/auto_discover_hosts.py` | Network host discovery |
+| `scripts/deploy_agents_non_root.py` | Non-root agent deployment |
+| `scripts/quick_deploy_agent.py` | Quick single-host deployment |
+| `scripts/setup_snmp.py` | SNMP configuration |
+| `scripts/test_snmp_devices.py` | SNMP connectivity testing |
+| `scripts/manage_users.py` | User management CLI |
+| `scripts/take_screenshots.py` | Capture UI screenshots |
+| `scripts/deploy/` | Per-host deploy shell scripts |
+| `scripts/fix/` | One-off fix scripts |
+
+## Project Structure
+
+```
+ai-system-health-dashboard/
+├── agents/                  # Per-OS agent scripts
+│   ├── centos/
+│   ├── debian/
+│   ├── rhel/
+│   ├── rocky/
+│   └── ubuntu/
+├── app/                     # FastAPI backend
+│   ├── static/
+│   │   ├── assets/          # Per-page CSS + JS
+│   │   └── *.html           # Frontend pages
+│   ├── main.py
+│   ├── models.py
+│   ├── storage.py
+│   ├── auth_storage.py
+│   ├── config.py
+│   ├── anomaly.py
+│   ├── metrics.py
+│   └── protocols.py
+├── data/                    # Runtime DBs + logs (gitignored)
+├── docs/
+│   ├── guides/              # Deployment + config guides
+│   └── screenshots/         # README screenshots
+├── scripts/
+│   ├── deploy/              # Host-specific deploy scripts
+│   ├── fix/                 # One-off fix scripts
+│   ├── util/                # Utility/migration scripts
+│   ├── manage_users.py
+│   ├── take_screenshots.py
+│   └── ...
+├── .env.example
+├── .gitignore
+├── README.md
+└── requirements.txt
+```

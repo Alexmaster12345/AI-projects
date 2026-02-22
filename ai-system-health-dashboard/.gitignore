@@ -9,6 +9,20 @@ __pycache__/
 .env
 .DS_Store
 
-# local metrics DB
+# local metrics DB and runtime data
 data/*.db
 data/*.db-*
+data/*.json
+
+# cookies / session files
+cookies.txt
+
+# stale artifact JSONs (moved to docs/ but keep future ones out of root)
+*.json
+
+# test/scratch scripts at root
+create_admin.py
+recreate_admin.py
+test_auth.py
+verify_password.py
+ORGANIZATION_COMPLETE.md
