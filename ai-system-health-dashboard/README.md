@@ -392,37 +392,25 @@ sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/s
 
 ```
 ai-system-health-dashboard/
-├── agents/                  # Per-OS agent scripts
-│   ├── centos/
-│   ├── debian/
-│   ├── rhel/
-│   ├── rocky/
-│   └── ubuntu/
-├── app/                     # FastAPI backend
+├── agents/                  # Per-OS agent scripts (centos/debian/rhel/rocky/ubuntu)
+├── app/                     # FastAPI backend + static frontend
 │   ├── static/
 │   │   ├── assets/          # Per-page CSS + JS
-│   │   └── *.html           # Frontend pages
-│   ├── main.py
-│   ├── models.py
-│   ├── storage.py
-│   ├── auth_storage.py
-│   ├── config.py
-│   ├── anomaly.py
-│   ├── metrics.py
-│   └── protocols.py
+│   │   └── *.html
+│   └── *.py                 # main, models, storage, auth, config, anomaly, metrics, protocols
 ├── data/                    # Runtime DBs + logs (gitignored)
 ├── docs/
-│   ├── guides/              # Deployment + config guides
+│   ├── guides/              # All .md deployment/fix/config guides
 │   └── screenshots/         # README screenshots
 ├── scripts/
-│   ├── deploy/              # Host-specific deploy scripts
-│   ├── fix/                 # One-off fix scripts
-│   ├── util/                # Utility/migration scripts
+│   ├── deploy/              # Per-host deploy_*.sh scripts
+│   ├── fix/                 # fix_*.sh / fix_*.py scripts
+│   ├── util/                # One-off utility/migration scripts
 │   ├── manage_users.py
 │   ├── take_screenshots.py
 │   └── ...
 ├── .env.example
-├── .gitignore
-├── README.md
+├── .gitignore               # Now also ignores data/*.json, cookies.txt, scratch scripts
+├── README.md                # Updated with Project Structure section + correct paths
 └── requirements.txt
 ```
