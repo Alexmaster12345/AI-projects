@@ -1227,9 +1227,29 @@ async def _sampler_loop() -> None:
 async def startup() -> None:
     await init_auth_storage()
     await init_storage()
+    await _seed_default_admin()
     start_protocol_checker()
     asyncio.create_task(_host_checker_loop())
     asyncio.create_task(_sampler_loop())
+
+
+async def _seed_default_admin() -> None:
+    """Create default admin/admin user if the users table is empty."""
+    import logging
+    try:
+        users = await asyncio.to_thread(auth_storage.get_all_users)
+        if not users:
+            await asyncio.to_thread(
+                auth_storage.create_user,
+                "admin", "admin", role="admin"
+            )
+            logging.getLogger("uvicorn").warning(
+                "No users found — created default admin user "
+                "(username: admin, password: admin). "
+                "Please change this password after first login."
+            )
+    except Exception:
+        pass
 
 
 @app.websocket("/ws/metrics")
