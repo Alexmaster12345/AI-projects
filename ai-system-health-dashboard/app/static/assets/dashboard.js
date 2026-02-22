@@ -40,49 +40,29 @@
           var el = document.getElementById('dashUser');
           if (el) el.textContent = '👤 ' + data.username;
         }
-        if (data.role === 'admin') initDashHostSelector();
+        if (data.role === 'admin') {
+          window._isAdmin = true;
+          // Load saved dashboard host and update header indicator
+          fetch('/api/admin/dashboard-host')
+            .then(function(r){ return r.ok ? r.json() : {}; })
+            .then(function(d) {
+              if (d.host_id) {
+                window._dashHostId = d.host_id;
+                // Fetch host name to show in indicator
+                fetch('/api/hosts').then(function(r){ return r.ok ? r.json() : []; }).then(function(hosts) {
+                  var arr = Array.isArray(hosts) ? hosts : (hosts.hosts || []);
+                  var h = arr.find(function(x){ return String(x.id) === String(d.host_id); });
+                  var indicator = document.getElementById('dashMainHost');
+                  if (indicator && h) {
+                    indicator.textContent = '⭐ ' + (h.name || h.address);
+                    indicator.style.display = '';
+                  }
+                });
+              }
+            }).catch(function(){});
+        }
       })
       .catch(function () {});
-  }
-
-  function initDashHostSelector() {
-    var sel = document.getElementById('dashHostSelect');
-    if (!sel) return;
-    sel.style.display = '';
-
-    // Load hosts list and current selection
-    Promise.all([
-      fetch('/api/hosts').then(function(r){ return r.ok ? r.json() : []; }),
-      fetch('/api/admin/dashboard-host').then(function(r){ return r.ok ? r.json() : {}; })
-    ]).then(function(results) {
-      var hosts = Array.isArray(results[0]) ? results[0] : (results[0].hosts || []);
-      var current = results[1].host_id || null;
-      // Populate options
-      hosts.forEach(function(h) {
-        var opt = document.createElement('option');
-        opt.value = h.id;
-        opt.textContent = '🖥 ' + (h.name || h.address);
-        if (String(h.id) === String(current)) opt.selected = true;
-        sel.appendChild(opt);
-      });
-      if (current) sel.value = String(current);
-    }).catch(function(){});
-
-    sel.addEventListener('change', function() {
-      var hostId = sel.value ? parseInt(sel.value) : null;
-      fetch('/api/admin/dashboard-host', {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({host_id: hostId})
-      }).then(function() {
-        window._dashHostId = hostId;
-      });
-    });
-
-    // Apply saved selection immediately
-    fetch('/api/admin/dashboard-host').then(function(r){ return r.ok ? r.json() : {}; }).then(function(d){
-      if (d.host_id) { window._dashHostId = d.host_id; sel.value = String(d.host_id); }
-    }).catch(function(){});
   }
 
   if (document.readyState === 'loading') {
@@ -568,6 +548,39 @@
         mon.href = `/host/${encodeURIComponent(String(hostId))}`;
         mon.textContent = 'Monitor';
         tdAct.appendChild(mon);
+
+        // Set as Main Dashboard button (admin only)
+        if (window._isAdmin) {
+          const mainBtn = document.createElement('button');
+          mainBtn.type = 'button';
+          mainBtn.className = 'hostsBtnSmall';
+          const isMain = String(hostId) === String(window._dashHostId || '');
+          mainBtn.textContent = isMain ? '⭐ Main' : '☆ Set Main';
+          mainBtn.title = isMain ? 'Currently shown on main dashboard' : 'Show this host on main dashboard';
+          if (isMain) mainBtn.style.cssText = 'color:#ffd54f;border-color:rgba(255,213,79,0.5);background:rgba(255,213,79,0.1);';
+          mainBtn.addEventListener('click', async () => {
+            const newId = isMain ? null : hostId;
+            await fetch('/api/admin/dashboard-host', {
+              method: 'PUT',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({host_id: newId})
+            });
+            window._dashHostId = newId;
+            // Update header indicator
+            const indicator = document.getElementById('dashMainHost');
+            if (indicator) {
+              if (newId) {
+                indicator.textContent = '⭐ ' + (h.name || h.address);
+                indicator.style.display = '';
+              } else {
+                indicator.style.display = 'none';
+              }
+            }
+            // Refresh host table to update button states
+            await refreshHosts();
+          });
+          tdAct.appendChild(mainBtn);
+        }
       }
 
       const editBtn = document.createElement('button');
