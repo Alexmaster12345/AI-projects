@@ -2,6 +2,11 @@
 (() => {
   'use strict';
 
+  // Helper functions
+  function $(id) {
+    return document.getElementById(id);
+  }
+
   // Elements
   const els = {
     user: $('usersUser'),
@@ -25,11 +30,6 @@
   // State
   let currentUser = null;
   let users = [];
-
-  // Helper functions
-  function $(id) {
-    return document.getElementById(id);
-  }
 
   function setText(el, text) {
     if (el) el.textContent = text;
