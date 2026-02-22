@@ -7,6 +7,33 @@ Real-time infrastructure monitoring dashboard with agent-based metrics, host mon
 - **Agents:** Lightweight Python agents for Linux hosts (Ubuntu, Debian, RHEL, CentOS, Rocky Linux)
 - **Anomaly detection:** Rolling z-score over recent metric history
 
+## Project Structure
+
+```
+ai-system-health-dashboard/
+├── agents/                  # Per-OS agent scripts (centos/debian/rhel/rocky/ubuntu)
+├── app/                     # FastAPI backend + static frontend
+│   ├── static/
+│   │   ├── assets/          # Per-page CSS + JS
+│   │   └── *.html
+│   └── *.py                 # main, models, storage, auth, config, anomaly, metrics, protocols
+├── data/                    # Runtime DBs + logs (gitignored)
+├── docs/
+│   ├── guides/              # All .md deployment/fix/config guides
+│   └── screenshots/         # README screenshots
+├── scripts/
+│   ├── deploy/              # Per-host deploy_*.sh scripts
+│   ├── fix/                 # fix_*.sh / fix_*.py scripts
+│   ├── util/                # One-off utility/migration scripts
+│   ├── manage_users.py
+│   ├── take_screenshots.py
+│   └── ...
+├── .env.example
+├── .gitignore               # Now also ignores data/*.json, cookies.txt, scratch scripts
+├── README.md                # Updated with Project Structure section + correct paths
+└── requirements.txt
+```
+
 ## UI Pages
 
 | Page | URL | Description |
@@ -388,29 +415,3 @@ sudo -u system-trace-agent python3 /home/system-trace-agent/system-trace-agent/s
 | `scripts/deploy/` | Per-host deploy shell scripts |
 | `scripts/fix/` | One-off fix scripts |
 
-## Project Structure
-
-```
-ai-system-health-dashboard/
-├── agents/                  # Per-OS agent scripts (centos/debian/rhel/rocky/ubuntu)
-├── app/                     # FastAPI backend + static frontend
-│   ├── static/
-│   │   ├── assets/          # Per-page CSS + JS
-│   │   └── *.html
-│   └── *.py                 # main, models, storage, auth, config, anomaly, metrics, protocols
-├── data/                    # Runtime DBs + logs (gitignored)
-├── docs/
-│   ├── guides/              # All .md deployment/fix/config guides
-│   └── screenshots/         # README screenshots
-├── scripts/
-│   ├── deploy/              # Per-host deploy_*.sh scripts
-│   ├── fix/                 # fix_*.sh / fix_*.py scripts
-│   ├── util/                # One-off utility/migration scripts
-│   ├── manage_users.py
-│   ├── take_screenshots.py
-│   └── ...
-├── .env.example
-├── .gitignore               # Now also ignores data/*.json, cookies.txt, scratch scripts
-├── README.md                # Updated with Project Structure section + correct paths
-└── requirements.txt
-```
