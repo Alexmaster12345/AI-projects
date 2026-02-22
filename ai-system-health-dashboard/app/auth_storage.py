@@ -371,7 +371,7 @@ class SQLiteAuthStorage:
         if not self.enabled:
             raise RuntimeError("Auth storage not enabled")
         conn = self._require_conn()
-        password_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), b"salt", 100000).hex()
+        password_hash = self.hash_password(password)
         created_at = time.time()
         
         with self._lock:
@@ -409,7 +409,7 @@ class SQLiteAuthStorage:
             set_clauses.append("username = ?")
             params.append(kwargs['username'])
         if 'password' in kwargs and kwargs['password']:
-            password_hash = hashlib.pbkdf2_hmac("sha256", kwargs['password'].encode("utf-8"), b"salt", 100000).hex()
+            password_hash = self.hash_password(kwargs['password'])
             set_clauses.append("password_hash = ?")
             params.append(password_hash)
         if 'role' in kwargs:
@@ -504,7 +504,7 @@ class SQLiteAuthStorage:
                 INSERT INTO user_groups (name, description, allowed_hosts, created_at)
                 VALUES (?, ?, ?, ?)
                 """,
-                (name, description, allowed_hosts, int(time.time()))
+                (name, description, json.dumps(allowed_hosts or []), int(time.time()))
             )
             group_id = cursor.lastrowid
             conn.commit()
@@ -524,7 +524,7 @@ class SQLiteAuthStorage:
                 SET name = ?, description = ?, allowed_hosts = ?
                 WHERE id = ?
                 """,
-                (name, description, allowed_hosts, group_id)
+                (name, description, json.dumps(allowed_hosts or []), group_id)
             )
             conn.commit()
         

@@ -74,6 +74,41 @@ ai-system-health-dashboard/
 ### Host Monitor
 ![Host Monitor](docs/screenshots/12_host_monitor.png)
 
+## Changelog
+
+### Feb 22, 2026
+
+#### Network Device Discovery & Icons
+- Enhanced auto-discovery (`/api/discovery/start`) to classify device types using SNMP sysDescr keyword matching and TCP port fingerprinting
+- Detected device types: `rack-server`, `switch`, `router`, `firewall`, `patch-panel`, `linux`, `windows`, `network`, `other`
+- `dashboard.js`: Added `DEVICE_TYPE_META` map — device type icons and colours shown in host table and SVG map nodes
+- `hosts.html`: Edit modal type dropdown updated with all new device types and icons
+- `index.html`: Host type datalist updated with new device types
+- `maps.html`: Rebuilt with dynamic SVG topology map and device inventory grid; auto-refreshes every 30 seconds
+
+#### User Management
+- **Users page** (`/users`): Action buttons split into separate columns — Edit | Reset Password | Delete | Activate
+- **Reset Password button**: Opens a modal to set a new password for any user (admin only); passwords are hashed correctly
+- Fixed `editUser` onclick — was passing user ID instead of full user object to modal
+- Fixed `editGroup` onclick — same bug fixed for user groups page
+- Fixed `create_user` API — was using broken `pbkdf2_hmac` with hardcoded salt; now uses `hash_password()` so created users can log in
+- Fixed `update_user` API — same password hashing bug fixed; changing a user's password via UI now works correctly
+
+#### User Groups
+- Fixed HTTP 400 on save — `allowed_hosts` list was passed raw to SQLite; now JSON-serialised before storage
+
+#### Role-Based Sidebar
+- `dashboard.js`: Non-admin (`user` role) users no longer see **Users** and **User groups** sidebar links on any page
+- If those are the only items in the Administration group, the entire group header is hidden too
+- Applied globally via `dashboard.js` — no per-page changes needed
+
+#### Agent & Host Monitor
+- Fixed `maps.html` CSS/JS structure — `.topoMenuItem` styles were inside `<script>` tag causing lint errors
+- `host.js`: Added 60-second grace period on page load before flagging "Agent offline" as critical — prevents false alarm before first agent report
+- Started and enabled `system-trace-agent` systemd service (was installed but inactive)
+
+---
+
 ## Key Features
 
 ### Host Monitor (`/host?id=<id>`)

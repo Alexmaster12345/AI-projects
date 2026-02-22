@@ -291,7 +291,10 @@
   }
 
   // Global functions for onclick handlers
-  window.editGroup = openGroupModal;
+  window.editGroup = (groupId) => {
+    const group = userGroups.find(g => g.id === groupId);
+    if (group) openGroupModal(group);
+  };
   window.deleteGroup = deleteGroup;
   window.viewGroupMembers = viewGroupMembers;
 

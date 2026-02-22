@@ -79,7 +79,7 @@
       renderUsers();
     } catch (error) {
       console.error('Failed to load users:', error);
-      els.usersTableBody.innerHTML = '<tr><td colspan="7" class="textCenter error">Failed to load users</td></tr>';
+      els.usersTableBody.innerHTML = '<tr><td colspan="10" class="textCenter error">Failed to load users</td></tr>';
       showErr('Failed to load users: ' + error.message);
     }
   }
@@ -88,7 +88,7 @@
     if (!els.usersTableBody) return;
 
     if (users.length === 0) {
-      els.usersTableBody.innerHTML = '<tr><td colspan="7" class="textCenter muted">No users found</td></tr>';
+      els.usersTableBody.innerHTML = '<tr><td colspan="10" class="textCenter muted">No users found</td></tr>';
       return;
     }
 
@@ -100,18 +100,19 @@
         <td><span class="statusBadge ${user.is_active ? 'active' : 'inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
         <td>${user.created_at ? new Date(user.created_at * 1000).toLocaleDateString() : '—'}</td>
         <td>${user.last_login ? new Date(user.last_login * 1000).toLocaleString() : 'Never'}</td>
-        <td>
-          <div class="actionButtons">
-            <button class="actionBtn edit" onclick="editUser(${user.id})" title="Edit">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button class="actionBtn delete" onclick="deleteUser(${user.id})" title="Delete">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"/></svg>
-            </button>
-            <button class="actionBtn edit" onclick="toggleUserStatus(${user.id})" title="${user.is_active ? 'Deactivate' : 'Activate'}">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${user.is_active ? '<path d="M10.5 13.5L7.5 10.5L2.5 15.5L11.5 24.5L22.5 13.5L17.5 8.5L14.5 11.5Z"/><path d="M14.5 2.5L19.5 7.5M16.5 5.5L18.5 7.5M12.5 11.5L14.5 13.5' : '<rect x="3" y="11" width="18" height="10" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'}</svg>
-            </button>
-          </div>
+        <td style="text-align:center;">
+          <button class="actionBtn edit" onclick="editUser(${user.id})" title="Edit">✏️ Edit</button>
+        </td>
+        <td style="text-align:center;">
+          <button class="actionBtn edit" onclick="openResetPasswordModal(${user.id})" title="Reset Password" style="background:rgba(255,152,0,0.15);border-color:rgba(255,152,0,0.4);color:#ffb74d;">🔑 Reset</button>
+        </td>
+        <td style="text-align:center;">
+          <button class="actionBtn delete" onclick="deleteUser(${user.id})" title="Delete">🗑️ Delete</button>
+        </td>
+        <td style="text-align:center;">
+          <button class="actionBtn ${user.is_active ? 'delete' : 'edit'}" onclick="toggleUserStatus(${user.id})" title="${user.is_active ? 'Deactivate' : 'Activate'}">
+            ${user.is_active ? 'Deactivate' : 'Activate'}
+          </button>
         </td>
       </tr>
     `).join('');
@@ -248,8 +249,54 @@
     }
   }
 
+  // Reset Password Modal
+  function openResetPasswordModal(userId) {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    document.getElementById('resetUserId').value = userId;
+    document.getElementById('resetUsername').textContent = user.username;
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+    document.getElementById('resetErr').style.display = 'none';
+    document.getElementById('resetPasswordModal').style.display = 'flex';
+  }
+
+  function closeResetPasswordModal() {
+    document.getElementById('resetPasswordModal').style.display = 'none';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+  }
+
+  async function doResetPassword() {
+    const userId = document.getElementById('resetUserId').value;
+    const newPwd = document.getElementById('newPassword').value.trim();
+    const confirmPwd = document.getElementById('confirmPassword').value.trim();
+    const errEl = document.getElementById('resetErr');
+
+    errEl.style.display = 'none';
+    if (!newPwd) { errEl.textContent = 'Password cannot be empty.'; errEl.style.display = ''; return; }
+    if (newPwd !== confirmPwd) { errEl.textContent = 'Passwords do not match.'; errEl.style.display = ''; return; }
+    if (newPwd.length < 4) { errEl.textContent = 'Password must be at least 4 characters.'; errEl.style.display = ''; return; }
+
+    try {
+      await fetchJson(`/api/admin/users/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ password: newPwd })
+      });
+      closeResetPasswordModal();
+      showSuccess('Password reset successfully');
+    } catch (e) {
+      errEl.textContent = 'Failed to reset password: ' + (e.message || e);
+      errEl.style.display = '';
+    }
+  }
+
   // Global functions for onclick handlers
-  window.editUser = openUserModal;
+  window.editUser = (userId) => {
+    const user = users.find(u => u.id === userId);
+    if (user) openUserModal(user);
+  };
+  window.openResetPasswordModal = openResetPasswordModal;
   window.deleteUser = deleteUser;
   window.toggleUserStatus = toggleUserStatus;
 
@@ -270,6 +317,15 @@
     if (els.userModalCancel) {
       els.userModalCancel.addEventListener('click', closeUserModal);
     }
+
+    const resetClose = document.getElementById('resetModalClose');
+    const resetCancel = document.getElementById('resetModalCancel');
+    const resetSave = document.getElementById('resetModalSave');
+    if (resetClose) resetClose.addEventListener('click', closeResetPasswordModal);
+    if (resetCancel) resetCancel.addEventListener('click', closeResetPasswordModal);
+    if (resetSave) resetSave.addEventListener('click', doResetPassword);
+    const resetModal = document.getElementById('resetPasswordModal');
+    if (resetModal) resetModal.addEventListener('click', (e) => { if (e.target === resetModal) closeResetPasswordModal(); });
     
     if (els.userForm) {
       els.userForm.addEventListener('submit', saveUser);

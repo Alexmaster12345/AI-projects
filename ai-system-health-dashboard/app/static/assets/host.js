@@ -349,10 +349,13 @@
   // ---- Problem detection & error panel ----
   let _lastReportedProblems = '';
   let _hostLogHostname = '';
+  const _pageLoadTime = Date.now();
+  const AGENT_GRACE_MS = 60000; // 60s grace on page load before flagging agent offline
 
   function checkProblems(cpuPct, memPct, diskPct, agentOffline, gpuList) {
     const problems = [];
-    if (agentOffline)       problems.push({ level: 'crit', msg: 'Agent offline' });
+    const withinGrace = (Date.now() - _pageLoadTime) < AGENT_GRACE_MS;
+    if (agentOffline && !withinGrace) problems.push({ level: 'crit', msg: 'Agent offline' });
     if (cpuPct  >= 90)      problems.push({ level: 'crit', msg: `CPU critical: ${cpuPct}%` });
     else if (cpuPct  >= 75) problems.push({ level: 'warn', msg: `CPU high: ${cpuPct}%` });
     if (memPct  >= 90)      problems.push({ level: 'crit', msg: `RAM critical: ${memPct}%` });

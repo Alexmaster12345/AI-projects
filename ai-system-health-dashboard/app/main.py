@@ -1793,6 +1793,105 @@ async def get_agent_metrics() -> Any:
 
 # === Discovery API ===
 
+def _classify_device_type(ip: str, open_ports: set, snmp_sysdescr: str) -> str:
+    """Classify a discovered device into a device type based on open ports and SNMP sysDescr."""
+    desc = (snmp_sysdescr or "").lower()
+
+    # SNMP sysDescr keyword matching (most reliable)
+    if any(k in desc for k in ("cisco ios", "juniper", "junos", "extreme networks", "aruba", "hp procurve",
+                                "dell powerconnect", "netgear gs", "catalyst", "nexus", "3com")):
+        if any(k in desc for k in ("switch", "catalyst", "nexus", "gs", "powerconnect", "procurve")):
+            return "switch"
+        if any(k in desc for k in ("router", "asr", "isr", "mx series", "srx")):
+            return "router"
+        if any(k in desc for k in ("firewall", "asa", "pix", "fortigate", "pfsense", "checkpoint", "srx")):
+            return "firewall"
+
+    if any(k in desc for k in ("pfsense", "opnsense", "fortigate", "checkpoint", "asa", "firewall", "netscreen")):
+        return "firewall"
+
+    if any(k in desc for k in ("switch", "catalyst", "nexus", "procurve", "powerconnect")):
+        return "switch"
+
+    if any(k in desc for k in ("router", "asr", "isr", "mikrotik", "routeros")):
+        return "router"
+
+    if any(k in desc for k in ("linux", "ubuntu", "debian", "centos", "rhel", "rocky", "fedora",
+                                "windows", "microsoft", "freebsd", "proxmox", "esxi", "vmware")):
+        return "rack-server"
+
+    # Port-based heuristics
+    has_ssh = 22 in open_ports
+    has_http = 80 in open_ports or 443 in open_ports or 8080 in open_ports or 8443 in open_ports
+    has_telnet = 23 in open_ports
+    has_snmp = 161 in open_ports
+    has_rdp = 3389 in open_ports
+    has_bgp = 179 in open_ports
+    has_ospf_port = 520 in open_ports or 521 in open_ports
+
+    # Firewall/router: BGP or routing ports, no SSH server services
+    if has_bgp or has_ospf_port:
+        return "router"
+
+    # Telnet + SNMP + no SSH = likely network device
+    if has_telnet and has_snmp and not has_ssh:
+        return "switch"
+
+    # SNMP only, no SSH, no HTTP = likely network device (switch/router)
+    if has_snmp and not has_ssh and not has_http and not has_rdp:
+        return "switch"
+
+    # SSH + HTTP/HTTPS = Linux server
+    if has_ssh and has_http:
+        return "rack-server"
+
+    # RDP = Windows server
+    if has_rdp:
+        return "rack-server"
+
+    # SSH only = Linux server
+    if has_ssh:
+        return "rack-server"
+
+    # SNMP + HTTP = could be managed switch with web UI
+    if has_snmp and has_http:
+        return "switch"
+
+    # Default: generic server
+    return "rack-server"
+
+
+def _probe_ports_sync(ip: str, ports: list, timeout: float = 0.8) -> set:
+    """Synchronously probe a list of TCP ports; return set of open ones."""
+    open_ports = set()
+    for port in ports:
+        try:
+            with socket.create_connection((ip, port), timeout=timeout):
+                open_ports.add(port)
+        except Exception:
+            pass
+    return open_ports
+
+
+def _snmp_sysdescr_sync(ip: str, community: str = "public", timeout: float = 1.5) -> str:
+    """Try to fetch SNMP sysDescr.0 via snmpget; return empty string on failure."""
+    try:
+        result = subprocess.run(
+            ["snmpget", "-v2c", "-c", community, "-t", "1", "-r", "1",
+             f"{ip}:161", "1.3.6.1.2.1.1.1.0"],
+            capture_output=True, text=True, timeout=timeout + 1
+        )
+        if result.returncode == 0:
+            out = result.stdout.strip()
+            # Output: SNMPv2-MIB::sysDescr.0 = STRING: <value>
+            if "STRING:" in out:
+                return out.split("STRING:", 1)[-1].strip().strip('"')
+            return out
+    except Exception:
+        pass
+    return ""
+
+
 @app.post("/api/discovery/start")
 async def start_discovery() -> Any:
     """Scan network, discover hosts, and save new ones to the database."""
@@ -1846,19 +1945,43 @@ async def start_discovery() -> Any:
     existing = await db_get_hosts(active_only=True)
     existing_addresses = {h.address for h in existing}
 
-    added = []
-    for ip in found_ips:
-        if ip in existing_addresses:
-            continue
+    # Ports to probe for device classification
+    PROBE_PORTS = [22, 23, 80, 179, 443, 520, 521, 3389, 8080, 8443]
+    SNMP_COMMUNITY = (getattr(settings, "snmp_community", "") or "public").strip() or "public"
+
+    async def classify_ip(ip: str) -> tuple[str, str, str]:
+        """Returns (ip, hostname, device_type)."""
         try:
             hostname = socket.gethostbyaddr(ip)[0]
         except Exception:
             hostname = f"host-{ip.split('.')[-1]}"
 
+        # Run port probe + SNMP in thread pool concurrently
+        open_ports, sysdescr = await asyncio.gather(
+            asyncio.to_thread(_probe_ports_sync, ip, PROBE_PORTS, 0.8),
+            asyncio.to_thread(_snmp_sysdescr_sync, ip, SNMP_COMMUNITY, 1.5),
+        )
+        device_type = _classify_device_type(ip, open_ports, sysdescr)
+        return (ip, hostname, device_type)
+
+    # Classify all new IPs concurrently (limit concurrency)
+    sem = asyncio.Semaphore(16)
+    async def classify_limited(ip):
+        async with sem:
+            return await classify_ip(ip)
+
+    classify_tasks = [classify_limited(ip) for ip in found_ips if ip not in existing_addresses]
+    classifications = await asyncio.gather(*classify_tasks, return_exceptions=True)
+
+    added = []
+    for result in classifications:
+        if isinstance(result, Exception):
+            continue
+        ip, hostname, device_type = result
         try:
             from app.models import HostCreate as HC
-            await db_create_host(HC(name=hostname, address=ip, type="linux", tags=[], notes=None))
-            added.append(ip)
+            await db_create_host(HC(name=hostname, address=ip, type=device_type, tags=[], notes=None))
+            added.append({"ip": ip, "type": device_type})
         except Exception:
             pass
 

@@ -4,6 +4,46 @@
    - WebSocket reconnect without accumulating timers
 */
 
+// ── Role-based sidebar visibility ─────────────────────────────────────────────
+(function () {
+  function applyRoleSidebar(role) {
+    if (role === 'admin') return; // admin sees everything
+    // Hide Users and User groups sidebar links for non-admin roles
+    document.querySelectorAll('.sideItem, .sideBtn').forEach(function (el) {
+      const action = el.getAttribute('data-action') || '';
+      const href   = el.getAttribute('href') || '';
+      if (action === 'users' || action === 'user-groups' ||
+          href === '/users'  || href === '/user-groups') {
+        el.style.display = 'none';
+      }
+    });
+    // Hide the Administration group title if all its children are hidden
+    document.querySelectorAll('.sideGroup').forEach(function (group) {
+      const title = group.querySelector('.sideGroupTitle');
+      if (!title) return;
+      if (title.textContent.trim() === 'Administration') {
+        const visible = Array.from(group.querySelectorAll('.sideItem')).filter(function (el) {
+          return el.style.display !== 'none';
+        });
+        if (visible.length === 0) group.style.display = 'none';
+      }
+    });
+  }
+
+  function initRoleSidebar() {
+    fetch('/api/me')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) { if (data && data.role) applyRoleSidebar(data.role); })
+      .catch(function () {});
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initRoleSidebar);
+  } else {
+    initRoleSidebar();
+  }
+})();
+
 (() => {
   const MAX = 72;
   const series = { cpu: [], mem: [], disk: [], gpuHealth: [] };
@@ -386,6 +426,24 @@
     els.hostsErr.textContent = String(msg);
   }
 
+  // Device type icon/label mapping
+  const DEVICE_TYPE_META = {
+    'rack-server':  { icon: '🖥️',  label: 'Rack Server',   color: '#4fc3f7' },
+    'linux':        { icon: '🐧',  label: 'Linux Server',  color: '#4fc3f7' },
+    'windows':      { icon: '🪟',  label: 'Windows Server',color: '#4fc3f7' },
+    'switch':       { icon: '🔀',  label: 'Network Switch', color: '#81c784' },
+    'router':       { icon: '📡',  label: 'Router',         color: '#ffb74d' },
+    'firewall':     { icon: '🛡️',  label: 'Firewall',       color: '#ef5350' },
+    'patch-panel':  { icon: '🔌',  label: 'Patch Panel',    color: '#ce93d8' },
+    'network':      { icon: '🌐',  label: 'Network Device', color: '#80cbc4' },
+  };
+
+  function getDeviceMeta(type) {
+    if (!type) return { icon: '💻', label: '—', color: '#aaa' };
+    const key = String(type).toLowerCase().replace(/\s+/g, '-');
+    return DEVICE_TYPE_META[key] || { icon: '💻', label: String(type), color: '#aaa' };
+  }
+
   function renderHosts(hosts) {
     const list = Array.isArray(hosts) ? hosts : [];
     hostsListCache = list;
@@ -427,7 +485,8 @@
       tdAddr.textContent = address;
 
       const tdType = document.createElement('td');
-      tdType.textContent = type;
+      const devMeta = getDeviceMeta(h && h.type);
+      tdType.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;" title="${devMeta.label}"><span style="font-size:16px;">${devMeta.icon}</span><span style="color:${devMeta.color};font-size:12px;font-weight:500;">${devMeta.label}</span></span>`;
 
       const tdTags = document.createElement('td');
       if (tags.length) {
@@ -1125,23 +1184,37 @@
       const r = n.kind === 'server' ? 70 : 56;
       g.appendChild(svgEl('circle', { cx: 0, cy: 0, r }));
 
+      // Device type icon (emoji rendered via foreignObject for SVG compatibility)
+      const devM = n.kind === 'server' ? { icon: '🖧', label: 'Server' } : getDeviceMeta(n.type);
+      const fo = svgEl('foreignObject', { x: -16, y: -r + 8, width: 32, height: 28 });
+      const iconDiv = document.createElement('div');
+      iconDiv.style.cssText = 'font-size:20px;text-align:center;line-height:1.3;user-select:none;';
+      iconDiv.textContent = devM.icon;
+      fo.appendChild(iconDiv);
+      g.appendChild(fo);
+
       // Title
-      const t1 = svgEl('text', { x: 0, y: -6, 'text-anchor': 'middle' });
+      const t1 = svgEl('text', { x: 0, y: -2, 'text-anchor': 'middle' });
       t1.textContent = String(n.name).slice(0, 22);
       g.appendChild(t1);
 
-      // Subtitle
-      const t2 = svgEl('text', { x: 0, y: 14, 'text-anchor': 'middle', class: 'sub' });
+      // Subtitle (address)
+      const t2 = svgEl('text', { x: 0, y: 16, 'text-anchor': 'middle', class: 'sub' });
       t2.textContent = n.kind === 'server' ? String(n.address) : String(n.address).slice(0, 26);
       g.appendChild(t2);
 
+      // Device type label
+      const t3 = svgEl('text', { x: 0, y: 30, 'text-anchor': 'middle', class: 'sub', style: `fill:${devM.color || '#aaa'};font-size:9px;` });
+      t3.textContent = n.kind === 'server' ? 'MONITOR SERVER' : (devM.label || '').toUpperCase();
+      g.appendChild(t3);
+
       // Badge / status
-      const badge = svgEl('text', { x: 0, y: 34, 'text-anchor': 'middle', class: 'badge' });
+      const badge = svgEl('text', { x: 0, y: 44, 'text-anchor': 'middle', class: 'badge' });
       badge.textContent = (n.status || 'unknown').toUpperCase();
       g.appendChild(badge);
 
       const title = svgEl('title');
-      title.textContent = `${n.name}\n${n.address}`;
+      title.textContent = `${n.name}\n${n.address}\nType: ${devM.label}`;
       g.appendChild(title);
 
       // Interaction

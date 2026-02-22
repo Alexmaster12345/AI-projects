@@ -187,12 +187,15 @@
                       <th>Status</th>
                       <th>Created</th>
                       <th>Last Login</th>
-                      <th>Actions</th>
+                      <th>Edit</th>
+                      <th>Reset Password</th>
+                      <th>Delete</th>
+                      <th>Activate</th>
                     </tr>
                   </thead>
                   <tbody id="usersTableBody">
                     <tr>
-                      <td colspan="7" class="textCenter muted">Loading users...</td>
+                      <td colspan="10" class="textCenter muted">Loading users...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -245,6 +248,32 @@
             <div class="modalFooter">
               <button type="button" class="btn btnSecondary" id="userModalCancel">Cancel</button>
               <button type="submit" form="userForm" class="btn btnPrimary">Save User</button>
+            </div>
+          </div>
+        </div>
+        <!-- Reset Password Modal -->
+        <div id="resetPasswordModal" class="modal" style="display: none;">
+          <div class="modalContent" style="max-width:400px;">
+            <div class="modalHeader">
+              <h3>Reset Password</h3>
+              <button class="modalClose" id="resetModalClose">&times;</button>
+            </div>
+            <div class="modalBody">
+              <input type="hidden" id="resetUserId">
+              <p style="margin:0 0 14px 0; color:#aaa; font-size:13px;">Resetting password for: <strong id="resetUsername" style="color:#e0e0e0;"></strong></p>
+              <div class="formGroup">
+                <label for="newPassword">New Password</label>
+                <input type="password" id="newPassword" placeholder="Enter new password" autocomplete="new-password">
+              </div>
+              <div class="formGroup">
+                <label for="confirmPassword">Confirm Password</label>
+                <input type="password" id="confirmPassword" placeholder="Confirm new password" autocomplete="new-password">
+              </div>
+              <div id="resetErr" style="color:#ff6b6b; font-size:13px; margin-top:8px; display:none;"></div>
+            </div>
+            <div class="modalFooter">
+              <button type="button" class="btn btnSecondary" id="resetModalCancel">Cancel</button>
+              <button type="button" class="btn btnPrimary" id="resetModalSave">Reset Password</button>
             </div>
           </div>
         </div>
