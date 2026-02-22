@@ -2725,11 +2725,15 @@ window.startAutoDiscovery = async function() {
     if (!resp.ok) throw new Error(data.detail || 'Discovery failed');
     const msg = data.message || 'Discovery complete';
     alert(msg);
-    // Refresh host list if on hosts view
-    if (typeof refreshHosts === 'function') refreshHosts();
   } catch (e) {
     alert('Discovery failed: ' + (e.message || 'Unknown error'));
   } finally {
     btns.forEach(b => { b.disabled = false; b.textContent = '🔍 Auto Discover'; });
+    // Refresh hosts page grid if available, otherwise fall back to dashboard refreshHosts
+    if (typeof window._hostsPageLoad === 'function') {
+      window._hostsPageLoad();
+    } else if (typeof refreshHosts === 'function') {
+      refreshHosts();
+    }
   }
 };
