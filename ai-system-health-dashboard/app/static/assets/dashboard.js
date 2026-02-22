@@ -38,7 +38,7 @@
         if (data.role) applyRoleSidebar(data.role);
         if (data.username) {
           var el = document.getElementById('dashUser');
-          if (el) el.textContent = '👤 ' + data.username + ' (' + data.role + ')';
+          if (el) el.textContent = '👤 ' + data.username;
         }
       })
       .catch(function () {});
