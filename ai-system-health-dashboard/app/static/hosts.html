@@ -521,6 +521,9 @@
         }
       })();
       
+    </script>
+    <script>
+
       function openEditModal(btn) {
           document.getElementById('editHostId').value = btn.dataset.id;
           document.getElementById('editHostName').value = btn.dataset.name || '';
@@ -711,12 +714,9 @@
       window._hostsPageStartDiscovery = startAutoDiscovery;
       window._hostsPageEditModal = openEditModal;
 
-      // Load on page ready
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', loadHosts);
-      } else {
-        loadHosts();
-      }
+      // Run after ALL scripts (including defer) have executed
+      window.addEventListener('load', loadHosts);
     </script>
+
   </body>
 </html>
