@@ -1956,8 +1956,17 @@ async def start_discovery() -> Any:
     """Scan network, discover hosts, and save new ones to the database."""
     import asyncio, re, socket
 
-    network = "192.168.50.0/24"
-    server_ip = "192.168.50.225"
+    # Detect local server IP and network dynamically
+    import socket as _sock
+    try:
+        s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        server_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        server_ip = "127.0.0.1"
+    # Derive /24 network from local IP
+    network = ".".join(server_ip.split(".")[:3]) + ".0/24"
 
     async def run(cmd):
         proc = await asyncio.create_subprocess_shell(
@@ -1994,8 +2003,8 @@ async def start_discovery() -> Any:
     ping_results = await asyncio.gather(*ping_tasks)
     ping_ips = {ip for ip, alive in zip(all_ips, ping_results) if alive}
 
-    # Combine both sets, exclude server itself
-    found_ips = sorted((nmap_ips | ping_ips) - {server_ip})
+    # Combine both sets — include all IPs including the server itself
+    found_ips = sorted(nmap_ips | ping_ips | {server_ip})
 
     if not found_ips:
         return {"status": "done", "message": "No hosts found on network", "added": 0, "found": 0}
@@ -2014,6 +2023,11 @@ async def start_discovery() -> Any:
             hostname = socket.gethostbyaddr(ip)[0]
         except Exception:
             hostname = f"host-{ip.split('.')[-1]}"
+        if ip == server_ip:
+            try:
+                hostname = socket.gethostname()
+            except Exception:
+                pass
 
         # Run port probe + SNMP in thread pool concurrently
         open_ports, sysdescr = await asyncio.gather(
