@@ -40,8 +40,49 @@
           var el = document.getElementById('dashUser');
           if (el) el.textContent = '👤 ' + data.username;
         }
+        if (data.role === 'admin') initDashHostSelector();
       })
       .catch(function () {});
+  }
+
+  function initDashHostSelector() {
+    var sel = document.getElementById('dashHostSelect');
+    if (!sel) return;
+    sel.style.display = '';
+
+    // Load hosts list and current selection
+    Promise.all([
+      fetch('/api/hosts').then(function(r){ return r.ok ? r.json() : []; }),
+      fetch('/api/admin/dashboard-host').then(function(r){ return r.ok ? r.json() : {}; })
+    ]).then(function(results) {
+      var hosts = Array.isArray(results[0]) ? results[0] : (results[0].hosts || []);
+      var current = results[1].host_id || null;
+      // Populate options
+      hosts.forEach(function(h) {
+        var opt = document.createElement('option');
+        opt.value = h.id;
+        opt.textContent = '🖥 ' + (h.name || h.address);
+        if (String(h.id) === String(current)) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      if (current) sel.value = String(current);
+    }).catch(function(){});
+
+    sel.addEventListener('change', function() {
+      var hostId = sel.value ? parseInt(sel.value) : null;
+      fetch('/api/admin/dashboard-host', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({host_id: hostId})
+      }).then(function() {
+        window._dashHostId = hostId;
+      });
+    });
+
+    // Apply saved selection immediately
+    fetch('/api/admin/dashboard-host').then(function(r){ return r.ok ? r.json() : {}; }).then(function(d){
+      if (d.host_id) { window._dashHostId = d.host_id; sel.value = String(d.host_id); }
+    }).catch(function(){});
   }
 
   if (document.readyState === 'loading') {
@@ -2473,12 +2514,31 @@
 
     while (polling) {
       try {
-        const [latest, insights] = await Promise.all([fetchJson('/api/metrics/latest'), fetchJson('/api/insights')]);
-        if (latest && latest.ts) render(latest, insights);
+        const hostId = window._dashHostId || null;
+        if (hostId) {
+          // Use selected remote host agent metrics
+          const data = await fetchJson(`/api/hosts/${hostId}/agent-metrics`);
+          if (data && data.found) {
+            const m = data.latest || {};
+            const sample = {
+              ts: data.last_seen || (Date.now() / 1000),
+              hostname: data.hostname || '',
+              cpu: { percent: (m.cpu || {}).percent || 0 },
+              memory: { percent: (m.memory || {}).percent || 0, total: (m.memory || {}).total, used: (m.memory || {}).used },
+              disk: [{ mountpoint: '/', percent: (m.disk || {}).percent || 0, total: (m.disk || {}).total, used: (m.disk || {}).used }],
+              net: { bytes_sent: m.net_sent || 0, bytes_recv: m.net_recv || 0 },
+              gpu: Array.isArray(m.gpu) ? m.gpu : [],
+            };
+            render(sample, null);
+          }
+        } else {
+          const [latest, insights] = await Promise.all([fetchJson('/api/metrics/latest'), fetchJson('/api/insights')]);
+          if (latest && latest.ts) render(latest, insights);
+        }
       } catch (_) {
         // ignore
       }
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 3000));
     }
   }
 

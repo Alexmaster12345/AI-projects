@@ -382,6 +382,45 @@ async def api_me(request: Request) -> Any:
     }
 
 
+
+# === Dashboard Host Selection ===
+_DASHBOARD_HOST_FILE = Path('data/dashboard_host.json')
+
+def _get_dashboard_host_id() -> int | None:
+    try:
+        if _DASHBOARD_HOST_FILE.exists():
+            return json.load(open(_DASHBOARD_HOST_FILE)).get('host_id')
+    except Exception:
+        pass
+    return None
+
+def _set_dashboard_host_id(host_id: int | None) -> None:
+    _DASHBOARD_HOST_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(_DASHBOARD_HOST_FILE, 'w') as f:
+        json.dump({'host_id': host_id}, f)
+
+
+@app.get("/api/admin/dashboard-host")
+async def get_dashboard_host(request: Request) -> Any:
+    """Get the currently selected dashboard host (admin only)."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    host_id = await asyncio.to_thread(_get_dashboard_host_id)
+    return {"host_id": host_id}
+
+
+@app.put("/api/admin/dashboard-host")
+async def set_dashboard_host(request: Request) -> Any:
+    """Set the dashboard host (admin only). Pass host_id=null to use local metrics."""
+    user = await _get_current_user(request)
+    if user is None or user.role != "admin":
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    body = await request.json()
+    host_id = body.get("host_id")  # None = local
+    await asyncio.to_thread(_set_dashboard_host_id, int(host_id) if host_id is not None else None)
+    return {"host_id": host_id}
+
 @app.get("/api/config")
 async def api_config(request: Request) -> Any:
     """Return non-secret configuration values for display in the UI."""
