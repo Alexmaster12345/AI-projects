@@ -726,6 +726,13 @@
 
       // Initial load
       document.addEventListener('DOMContentLoaded', loadHosts);
+
+      // Expose to global scope for onclick handlers
+      window.refreshHosts = refreshHosts;
+      window.loadHosts = loadHosts;
+      window.deleteHost = deleteHost;
+      window.openEditModal = openEditModal;
+      window.startAutoDiscovery = startAutoDiscovery;
     </script>
   </body>
 </html>
