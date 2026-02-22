@@ -299,7 +299,7 @@
             <div class="sideGroupTitle">Administration</div>
             <a class="sideItem" href="/users" data-action="users" data-label="Users">Users</a>
             <a class="sideItem" href="/user-groups" data-action="user-groups" data-label="User groups">User groups</a>
-            <a class="sideItem" href="#" onclick="window._hostsPageLoad(); return false;" data-action="refresh" data-label="Refresh">🔄 Refresh</a>
+            <a class="sideItem" href="#" href="#" data-action="refresh" data-label="Refresh">🔄 Refresh</a>
           </div>
         </nav>
 
@@ -332,11 +332,11 @@
                 <span id="conn">connecting…</span> · <span id="host">—</span>
             </div>
             <div style="display: flex; gap: 8px; margin-left: 15px; position: relative; z-index: 9999;">
-                <button id="autoDiscoverIcon" onclick="window.startAutoDiscovery()" title="Auto Discover" 
+                <button id="autoDiscoverIcon" title="Auto Discover" 
                         style="background: #FF0000 !important; color: #FFFFFF !important; border: 3px solid #000000 !important; padding: 12px 20px !important; border-radius: 8px !important; cursor: pointer !important; font-size: 20px !important; font-weight: bold !important; display: inline-block !important; align-items: center !important; gap: 8px !important; position: relative !important; z-index: 9999 !important; box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;">
                     🔍 AUTO DISCOVER
                 </button>
-                <button id="refreshIcon" onclick="window._hostsPageLoad()" title="Refresh" 
+                <button id="refreshIcon" title="Refresh" 
                         style="background: #00FF00 !important; color: #000000 !important; border: 3px solid #000000 !important; padding: 12px 20px !important; border-radius: 8px !important; cursor: pointer !important; font-size: 20px !important; font-weight: bold !important; display: inline-block !important; align-items: center !important; gap: 8px !important; position: relative !important; z-index: 9999 !important; box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;">
                     🔄 REFRESH
                 </button>
@@ -707,15 +707,44 @@
         }
       }
 
-      // Expose globals
+      // Assign globals immediately (this script runs synchronously)
       window._hostsPageLoad = loadHosts;
       window._hostsPageRefresh = refreshHosts;
       window._hostsPageDelete = deleteHost;
       window._hostsPageStartDiscovery = startAutoDiscovery;
       window._hostsPageEditModal = openEditModal;
 
-      // Run after ALL scripts (including defer) have executed
-      window.addEventListener('load', loadHosts);
+      // Wire buttons directly via event listeners (not onclick attr)
+      document.addEventListener('DOMContentLoaded', function() {
+        var refreshBtn = document.getElementById('refreshIcon');
+        if (refreshBtn) refreshBtn.addEventListener('click', refreshHosts);
+        var discoverBtn = document.getElementById('autoDiscoverIcon');
+        if (discoverBtn) discoverBtn.addEventListener('click', window.startAutoDiscovery);
+        // Initial load
+        loadHosts();
+      });
+
+      // Re-assign after any defer scripts run (in case dashboard.js overwrites)
+      window.addEventListener('load', function() {
+        window._hostsPageLoad = loadHosts;
+        window._hostsPageRefresh = refreshHosts;
+        window._hostsPageDelete = deleteHost;
+        window._hostsPageStartDiscovery = startAutoDiscovery;
+        window._hostsPageEditModal = openEditModal;
+        // Re-wire buttons after defer scripts
+        var refreshBtn = document.getElementById('refreshIcon');
+        if (refreshBtn) {
+          refreshBtn.onclick = null;
+          refreshBtn.addEventListener('click', refreshHosts);
+        }
+        var discoverBtn = document.getElementById('autoDiscoverIcon');
+        if (discoverBtn) {
+          discoverBtn.onclick = null;
+          discoverBtn.addEventListener('click', function() {
+            window.startAutoDiscovery();
+          });
+        }
+      });
     </script>
 
   </body>
