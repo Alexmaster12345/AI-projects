@@ -107,6 +107,18 @@ ai-system-health-dashboard/
 - `host.js`: Added 60-second grace period on page load before flagging "Agent offline" as critical — prevents false alarm before first agent report
 - Started and enabled `system-trace-agent` systemd service (was installed but inactive)
 
+### Feb 22, 2026 (later)
+
+#### Auto-seed Default Admin User
+- `main.py`: On startup, if the `users` table is empty, the app automatically creates a default `admin` / `admin` account
+- A warning is logged reminding the operator to change the password after first login
+- Ensures a fresh clone + run is immediately usable without manual DB setup
+
+#### Restore & Recovery Notes
+- `.env` is gitignored — after a fresh clone, copy `.env.example` to `.env` and set `SESSION_SECRET_KEY`
+- `data/auth.db` users are not committed — on first run the app now auto-creates `admin`/`admin`
+- To add more users after setup: `python scripts/manage_users.py create --username <name> --role admin --password <pass>`
+
 ---
 
 ## Key Features
