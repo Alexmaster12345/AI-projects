@@ -616,9 +616,8 @@
               // Call the discovery API
               const response = await fetch('/api/discovery/start', {
                   method: 'POST',
-                  headers: {
-                      'Content-Type': 'application/json'
-                  }
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'same-origin'
               });
               
               if (response.ok) {
@@ -626,13 +625,6 @@
                   const msg = result.message || 'Discovery complete';
                   btn.innerHTML = '✅ ' + msg;
                   btn.style.background = '#28a745';
-                  // Refresh table immediately
-                  await loadHosts();
-                  setTimeout(() => {
-                      btn.disabled = false;
-                      btn.innerHTML = originalText;
-                      btn.style.background = '';
-                  }, 2000);
               } else {
                   throw new Error('Discovery failed');
               }
@@ -640,11 +632,14 @@
               console.error('Discovery error:', error);
               btn.innerHTML = '❌ Error';
               btn.style.background = '#dc3545';
+          } finally {
+              // Always refresh the host grid and reset button
+              loadHosts();
               setTimeout(() => {
                   btn.disabled = false;
                   btn.innerHTML = originalText;
                   btn.style.background = '';
-              }, 2000);
+              }, 2500);
           }
       }
       
@@ -659,8 +654,8 @@
         if (!grid) return;
         try {
           const [hosts, agentStatus] = await Promise.all([
-            fetch('/api/hosts').then(r => r.ok ? r.json() : []),
-            fetch('/api/agent/status').then(r => r.ok ? r.json() : {})
+            fetch('/api/hosts', {credentials:'same-origin'}).then(r => r.ok ? r.json() : []),
+            fetch('/api/agent/status', {credentials:'same-origin'}).then(r => r.ok ? r.json() : {})
           ]);
           const arr = Array.isArray(hosts) ? hosts : [];
           if (arr.length === 0) {
@@ -699,7 +694,8 @@
             </div>`;
           }).join('');
         } catch(e) {
-          grid.innerHTML = `<div style="color:#f44336;padding:20px;grid-column:1/-1;">Failed to load hosts: ${e.message}</div>`;
+          console.error('loadHosts error:', e);
+          grid.innerHTML = `<div style="color:#f44336;padding:20px;grid-column:1/-1;">Failed to load hosts: ${e.message || e}</div>`;
         }
       }
 
