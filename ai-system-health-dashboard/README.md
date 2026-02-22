@@ -56,9 +56,6 @@ ai-system-health-dashboard/
 ### Dashboard
 ![Dashboard](docs/screenshots/02_dashboard.png)
 
-### Problems
-![Problems](docs/screenshots/03_problems.png)
-
 ### Hosts
 ![Hosts](docs/screenshots/04_hosts_v2.png)
 
@@ -67,12 +64,6 @@ ai-system-health-dashboard/
 
 ### Inventory
 ![Inventory](docs/screenshots/06_inventory.png)
-
-### Overview
-![Overview](docs/screenshots/07_overview.png)
-
-### Configuration
-![Configuration](docs/screenshots/08_configuration.png)
 
 ### System Logs
 ![System Logs](docs/screenshots/10_system_logs.png)
