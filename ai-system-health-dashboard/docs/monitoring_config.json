@@ -1,0 +1,27 @@
+{
+  "title": "System Trace Network Operations Center",
+  "use_cases": [
+    "Network Performance Monitoring",
+    "Fault Detection",
+    "Device Inventory Management"
+  ],
+  "monitored_metrics": [
+    "ICMP Response Time",
+    "Packet Loss",
+    "Device Availability",
+    "Network Latency",
+    "Protocol Health Status"
+  ],
+  "alert_thresholds": {
+    "icmp_timeout": "2 seconds",
+    "packet_loss_warning": "5%",
+    "packet_loss_critical": "20%",
+    "response_time_warning": "100ms",
+    "response_time_critical": "500ms"
+  },
+  "monitoring_schedule": {
+    "protocol_checks": "Every 15 seconds",
+    "data_retention": "24 hours",
+    "historical_analysis": "Real-time"
+  }
+}

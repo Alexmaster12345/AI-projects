@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Trace · Overview</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260211_2" />
+    <link rel="stylesheet" href="/static/assets/overview.css?v=20260207" />
+    <script defer src="/static/assets/dashboard.js?v=20260211_2"></script>
+    <script defer src="/static/assets/overview.js?v=20260207"></script>
+    <style>
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar {
+      transform: translateX(calc(-100% + 14px)) !important;
+      transition: transform 180ms ease !important;
+    }
+    body.sidebarAutoHide.sidebarHover .sidebar,
+    body.sidebarAutoHide.sidebarOpen .sidebar {
+      transform: translateX(0) !important;
+      transition: transform 180ms ease !important;
+    }
+    body.sidebarAutoHide .content {
+      margin-left: 14px !important;
+      transition: margin-left 180ms ease !important;
+    }
+    body.sidebarAutoHide.sidebarHover .content,
+    body.sidebarAutoHide.sidebarOpen .content {
+      margin-left: var(--side-w, 260px) !important;
+    }
+    </style>
+    <script>
+    (function() {
+      let sidebarHover = false;
+      function initAutoHide() {
+        const sidebar = document.getElementById('sidebar');
+        if (!sidebar) return;
+        document.body.classList.add('sidebarAutoHide');
+        document.addEventListener('mousemove', function(e) {
+          if (e.clientX <= 30) {
+            if (!sidebarHover) { sidebarHover = true; document.body.classList.add('sidebarHover'); }
+          } else if (e.clientX > 100) {
+            if (sidebarHover) { sidebarHover = false; document.body.classList.remove('sidebarHover'); }
+          }
+        });
+        sidebar.addEventListener('mouseenter', function() { sidebarHover = true; document.body.classList.add('sidebarHover'); });
+        sidebar.addEventListener('mouseleave', function() { sidebarHover = false; document.body.classList.remove('sidebarHover'); });
+      }
+      if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initAutoHide); } else { initAutoHide(); }
+    })();
+    </script>
+  </head>
+  <body class="sidebarAutoHide">
+    <div class="appShell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">System Trace</div>
+          </div>
+
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/" data-action="dashboard" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="/overview" data-action="overview" data-label="Overview" aria-current="page">Overview</a>
+            <a class="sideItem" href="/#hosts" data-action="hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/#maps" data-action="maps" data-label="Maps">Maps</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Configuration</div>
+            <a class="sideItem" href="/configuration" data-action="configuration" data-label="Configuration">Configuration</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <a class="sideItem" href="/users" data-action="users" data-label="Users">Users</a>
+            <a class="sideItem" href="/user-groups" data-action="user-groups" data-label="User groups">User groups</a>
+          </div>
+        </nav>
+
+        <div class="sideBottom" aria-label="Secondary">
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit" data-action="logout">Sign out</button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="content" id="content">
+        <div class="overviewWrap">
+          <header class="overviewHeader">
+            <div>
+              <div class="overviewTitle">Overview</div>
+              <div class="overviewSub muted">High-level monitoring status (live).</div>
+            </div>
+            <div class="overviewBadge">
+              <span class="dot"></span>
+              <span id="ovConn">connecting…</span>
+              <span class="sep">·</span>
+              <span class="muted" id="ovUser">—</span>
+            </div>
+          </header>
+
+          <div id="ovErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+          <div class="overviewGrid2">
+            <section class="hostsCard">
+              <div class="hostsCardTitle">System snapshot</div>
+              <div class="overviewKv">
+                <div class="overviewKvRow"><span class="k">Host</span><span id="ovHostname" class="v">—</span></div>
+                <div class="overviewKvRow"><span class="k">Uptime</span><span id="ovUptime" class="v">—</span></div>
+                <div class="overviewKvRow"><span class="k">CPU</span><span id="ovCpu" class="v">—</span></div>
+                <div class="overviewKvRow"><span class="k">RAM</span><span id="ovMem" class="v">—</span></div>
+                <div class="overviewKvRow"><span class="k">Disk</span><span id="ovDisk" class="v">—</span></div>
+                <div class="overviewKvRow"><span class="k">Network</span><span id="ovNet" class="v">—</span></div>
+                <div class="overviewKvRow"><span class="k">GPU</span><span id="ovGpu" class="v">—</span></div>
+              </div>
+              <div class="muted overviewSmall">Last update: <span id="ovLastUpdate">—</span></div>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Protocols</div>
+              <div class="overviewKv">
+                <div class="overviewKvRow"><span class="k">NTP</span><span id="ovNtp" class="v proto unknown">—</span></div>
+                <div class="overviewKvRow"><span class="k">ICMP</span><span id="ovIcmp" class="v proto unknown">—</span></div>
+                <div class="overviewKvRow"><span class="k">SNMP</span><span id="ovSnmp" class="v proto unknown">—</span></div>
+                <div class="overviewKvRow"><span class="k">NetFlow</span><span id="ovNetflow" class="v proto unknown">—</span></div>
+              </div>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Insights</div>
+              <div id="ovSummary" class="muted">—</div>
+              <div class="overviewKv">
+                <div class="overviewKvRow"><span class="k">Anomalies</span><span id="ovAnoms" class="v">—</span></div>
+              </div>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Inventory</div>
+              <div class="overviewKv">
+                <div class="overviewKvRow"><span class="k">Active hosts</span><span id="ovHostCount" class="v">—</span></div>
+              </div>
+              <div class="muted overviewSmall">Counts are from the Hosts inventory API.</div>
+            </section>
+
+            <section class="hostsCard" id="ovDbCard" style="display:none;">
+              <div class="hostsCardTitle">Database (admin)</div>
+              <div id="ovDbStatus" class="muted">—</div>
+              <pre id="ovDbJson" class="overviewPre"></pre>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

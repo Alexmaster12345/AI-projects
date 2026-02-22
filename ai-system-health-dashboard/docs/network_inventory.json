@@ -1,0 +1,36 @@
+{
+  "created": "2026-02-16 22:11:20",
+  "total_devices": 4,
+  "network_segments": [
+    "192.168.50.x",
+    "192.168.1.x",
+    "10.0.0.x"
+  ],
+  "monitoring_target": "192.168.50.225",
+  "devices": [
+    {
+      "ip": "192.168.50.1",
+      "type": "Gateway/Router",
+      "status": "Active",
+      "location": "Network Core"
+    },
+    {
+      "ip": "192.168.50.225",
+      "type": "Server/Workstation",
+      "status": "Active",
+      "location": "Network Segment"
+    },
+    {
+      "ip": "192.168.1.1",
+      "type": "Alternative Gateway",
+      "status": "Active",
+      "location": "Backup Network"
+    },
+    {
+      "ip": "10.0.0.225",
+      "type": "Management Network",
+      "status": "Active",
+      "location": "Management Segment"
+    }
+  ]
+}

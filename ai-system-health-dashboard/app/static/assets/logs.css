@@ -1,0 +1,325 @@
+/* ===== System Logs Page ===== */
+
+.logsWrap {
+  padding: 20px 24px 40px;
+  max-width: 1400px;
+}
+
+.logsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.logsHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logsBack {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.5;
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.logsBack:hover { opacity: 0.9; }
+
+.logsTitle {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.logsSub {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.logsHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.logsSelect, .logsInput {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 10px;
+  outline: none;
+}
+.logsSelect:focus, .logsInput:focus {
+  border-color: rgba(255,255,255,0.28);
+}
+.logsInput { width: 160px; }
+
+.logsBtn {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.logsBtn:hover { background: rgba(255,255,255,0.13); }
+
+.logsBtnDanger {
+  background: rgba(244,67,54,0.10);
+  border: 1px solid rgba(244,67,54,0.30);
+  border-radius: 6px;
+  color: #f44336;
+  font-size: 12px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.logsBtnDanger:hover { background: rgba(244,67,54,0.20); }
+
+.logsConnBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
+  font-size: 11px;
+}
+.logsConnBadge .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 65%, var(--text));
+}
+
+/* --- Summary tiles --- */
+.logsSummary {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.logsSumTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  min-width: 80px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.logsSumTile.crit  { color: #f44336; border-color: rgba(244,67,54,0.30); background: rgba(244,67,54,0.07); }
+.logsSumTile.warn  { color: #ff9800; border-color: rgba(255,152,0,0.30);  background: rgba(255,152,0,0.07); }
+.logsSumTile.info  { color: #63b3ed; border-color: rgba(99,179,237,0.30); background: rgba(99,179,237,0.07); }
+.logsSumTile.total { color: var(--text); }
+
+.logsSumLabel {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.5;
+  margin-top: 3px;
+}
+
+/* --- Table --- */
+.logsTableWrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.logsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.logsTable thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.45;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  white-space: nowrap;
+  background: rgba(0,0,0,0.15);
+}
+
+.logsTable tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.1s;
+}
+.logsTable tbody tr:last-child { border-bottom: none; }
+.logsTable tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+.logsTable td {
+  padding: 9px 14px;
+  vertical-align: middle;
+}
+
+.logsTable td.logsEmpty {
+  text-align: center;
+  padding: 40px;
+}
+
+.logTs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0.6;
+}
+
+.logLevel {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.logLevel.crit { color: #f44336; background: rgba(244,67,54,0.14); border: 1px solid rgba(244,67,54,0.30); }
+.logLevel.warn { color: #ff9800; background: rgba(255,152,0,0.12);  border: 1px solid rgba(255,152,0,0.28); }
+.logLevel.info { color: #63b3ed; background: rgba(99,179,237,0.10); border: 1px solid rgba(99,179,237,0.25); }
+
+.logHost {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.logIp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.logSource {
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+.logMsg {
+  max-width: 500px;
+}
+
+/* --- Row coloring by level --- */
+.logsTable tbody tr.row-crit { background: rgba(244,67,54,0.05); }
+.logsTable tbody tr.row-warn { background: rgba(255,152,0,0.04); }
+
+/* ===== Host Monitor Error Panel ===== */
+
+.hmErrPanel {
+  margin-bottom: 20px;
+  border: 1px solid rgba(244,67,54,0.30);
+  border-radius: 12px;
+  background: rgba(244,67,54,0.06);
+  overflow: hidden;
+}
+
+.hmErrPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(244,67,54,0.15);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hmErrPanelTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #f44336;
+}
+
+.hmErrBlink {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #f44336;
+  animation: errBlink 0.9s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes errBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.15; }
+}
+
+.hmErrPanelLink {
+  font-size: 11px;
+  color: #f44336;
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.hmErrPanelLink:hover { opacity: 1; }
+
+.hmErrList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.hmErrRow {
+  display: grid;
+  grid-template-columns: 130px 60px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 12px;
+}
+.hmErrRow:last-child { border-bottom: none; }
+
+.hmErrTs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+.hmErrLevel {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.hmErrLevel.crit { color: #f44336; background: rgba(244,67,54,0.14); }
+.hmErrLevel.warn { color: #ff9800; background: rgba(255,152,0,0.12); }
+
+.hmErrMsg { opacity: 0.85; }
+
+/* Blink the whole host header when there's an active problem */
+@keyframes headerBlink {
+  0%, 100% { border-color: rgba(244,67,54,0.55); box-shadow: 0 0 0 0 rgba(244,67,54,0); }
+  50%       { border-color: rgba(244,67,54,0.90); box-shadow: 0 0 12px 2px rgba(244,67,54,0.25); }
+}
+
+.hmWrap.hasProblem .hmHeader {
+  border: 1px solid rgba(244,67,54,0.55);
+  border-radius: 12px;
+  padding: 10px 14px;
+  animation: headerBlink 1.4s ease-in-out infinite;
+}

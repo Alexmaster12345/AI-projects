@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Trace · Configuration</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260211_2" />
+    <link rel="stylesheet" href="/static/assets/configuration.css?v=20260207" />
+    <script defer src="/static/assets/dashboard.js?v=20260211_2"></script>
+    <script defer src="/static/assets/configuration.js?v=20260207"></script>
+    <style>
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar {
+      transform: translateX(calc(-100% + 14px)) !important;
+      transition: transform 180ms ease !important;
+    }
+    body.sidebarAutoHide.sidebarHover .sidebar,
+    body.sidebarAutoHide.sidebarOpen .sidebar {
+      transform: translateX(0) !important;
+      transition: transform 180ms ease !important;
+    }
+    body.sidebarAutoHide .content {
+      margin-left: 14px !important;
+      transition: margin-left 180ms ease !important;
+    }
+    body.sidebarAutoHide.sidebarHover .content,
+    body.sidebarAutoHide.sidebarOpen .content {
+      margin-left: var(--side-w, 260px) !important;
+    }
+    </style>
+    <script>
+    (function() {
+      let sidebarHover = false;
+      function initAutoHide() {
+        const sidebar = document.getElementById('sidebar');
+        if (!sidebar) return;
+        document.body.classList.add('sidebarAutoHide');
+        document.addEventListener('mousemove', function(e) {
+          if (e.clientX <= 30) {
+            if (!sidebarHover) { sidebarHover = true; document.body.classList.add('sidebarHover'); }
+          } else if (e.clientX > 100) {
+            if (sidebarHover) { sidebarHover = false; document.body.classList.remove('sidebarHover'); }
+          }
+        });
+        sidebar.addEventListener('mouseenter', function() { sidebarHover = true; document.body.classList.add('sidebarHover'); });
+        sidebar.addEventListener('mouseleave', function() { sidebarHover = false; document.body.classList.remove('sidebarHover'); });
+      }
+      if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initAutoHide); } else { initAutoHide(); }
+    })();
+    </script>
+  </head>
+  <body class="sidebarAutoHide">
+    <div class="appShell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">System Trace</div>
+          </div>
+
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/" data-action="dashboard" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="/overview" data-action="overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="/#hosts" data-action="hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/#maps" data-action="maps" data-label="Maps">Maps</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Configuration</div>
+            <a class="sideItem" href="/configuration" data-action="configuration" data-label="Configuration" aria-current="page">Configuration</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <a class="sideItem" href="/users" data-action="users" data-label="Users">Users</a>
+            <a class="sideItem" href="/user-groups" data-action="user-groups" data-label="User groups">User groups</a>
+          </div>
+        </nav>
+
+        <div class="sideBottom" aria-label="Secondary">
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit" data-action="logout">Sign out</button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="content" id="content">
+        <div class="cfgWrap">
+          <header class="cfgHeader">
+            <div>
+              <div class="cfgTitle">Configuration</div>
+              <div class="cfgSub muted">Read-only view of server settings (secrets hidden).</div>
+            </div>
+            <div class="cfgBadge">
+              <span class="dot"></span>
+              <span id="cfgConn">ready</span>
+              <span class="sep">·</span>
+              <span class="muted" id="cfgUser">—</span>
+            </div>
+          </header>
+
+          <div id="cfgErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+          <div class="cfgGrid">
+            <section class="hostsCard">
+              <div class="hostsCardTitle">App</div>
+              <div class="cfgKv">
+                <div class="cfgKvRow"><span class="k">Title: </span><span id="cfgAppTitle" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Version: </span><span id="cfgAppVersion" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Help URL: </span><span id="cfgHelpUrl" class="v">—</span></div>
+              </div>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Sampling</div>
+              <div class="cfgKv">
+                <div class="cfgKvRow"><span class="k">Sample interval: </span><span id="cfgSampleInterval" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">History window: </span><span id="cfgHistorySeconds" class="v">—</span></div>
+              </div>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Anomaly detection</div>
+              <div class="cfgKv">
+                <div class="cfgKvRow"><span class="k">Window: </span><span id="cfgAnomWindow" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Z threshold: </span><span id="cfgAnomZ" class="v">—</span></div>
+              </div>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Protocol checks</div>
+              <div class="cfgKv">
+                <div class="cfgKvRow"><span class="k">Check interval: </span><span id="cfgProtoInterval" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">NTP server: </span><span id="cfgNtpServer" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">NTP timeout: </span><span id="cfgNtpTimeout" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">ICMP host: </span><span id="cfgIcmpHost" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">ICMP timeout: </span><span id="cfgIcmpTimeout" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">SNMP host: </span><span id="cfgSnmpHost" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">SNMP port: </span><span id="cfgSnmpPort" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">SNMP timeout: </span><span id="cfgSnmpTimeout" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">SNMP community set: </span><span id="cfgSnmpCommunitySet" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">NetFlow port: </span><span id="cfgNetflowPort" class="v">—</span></div>
+              </div>
+              <div class="muted cfgSmall">Note: leaving SNMP host empty disables SNMP checks.</div>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Storage</div>
+              <div class="cfgKv">
+                <div class="cfgKvRow"><span class="k">Enabled: </span><span id="cfgStorageEnabled" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Retention: </span><span id="cfgRetention" class="v">—</span></div>
+              </div>
+              <div id="cfgDbBlock" style="display:none;">
+                <div class="muted cfgSmall">Admin DB stats:</div>
+                <pre id="cfgDbJson" class="cfgPre"></pre>
+              </div>
+            </section>
+
+            <section class="hostsCard" id="cfgPathsCard" style="display:none;">
+              <div class="hostsCardTitle">Paths (admin)</div>
+              <pre id="cfgPathsJson" class="cfgPre"></pre>
+            </section>
+
+            <section class="hostsCard">
+              <div class="hostsCardTitle">Auth cookies</div>
+              <div class="cfgKv">
+                <div class="cfgKvRow"><span class="k">Session cookie: </span><span id="cfgSessName" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Session max age: </span><span id="cfgSessAge" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">SameSite: </span><span id="cfgSameSite" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Secure: </span><span id="cfgSecure" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Remember cookie: </span><span id="cfgRememberName" class="v">—</span></div>
+                <div class="cfgKvRow"><span class="k">Remember max age: </span><span id="cfgRememberAge" class="v">—</span></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

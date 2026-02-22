@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Trace · Network Maps</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260211_2" />
+    <script defer src="/static/assets/dashboard.js?v=20260211_18"></script>
+    <style>
+        .maps-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .page-header h1 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            border: 1px solid #6c757d;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+            transform: translateY(-1px);
+        }
+        
+        .btn-icon {
+            font-size: 16px;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .icon-btn {
+            background: none !important;
+            border: 1px solid #ccc !important;
+            color: #333 !important;
+            cursor: pointer !important;
+            padding: 6px 10px !important;
+            border-radius: 4px !important;
+            margin-left: 8px !important;
+            transition: all 0.2s ease !important;
+            font-size: 18px !important;
+            line-height: 1 !important;
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+            z-index: 1000 !important;
+        }
+        
+        .icon-btn:hover {
+            background: #007bff !important;
+            color: white !important;
+            border-color: #007bff !important;
+            transform: translateY(-1px) !important;
+        }
+        
+        .icon-btn:active {
+            transform: scale(0.95) !important;
+        }
+        
+        .icon-btn .icon {
+            display: inline-block !important;
+            visibility: visible !important;
+        }
+        
+        /* Ensure badge doesn't hide icons */
+        .badge {
+            display: flex !important;
+            align-items: center !important;
+            flex-wrap: nowrap !important;
+        }
+        
+        .badge .icon-btn {
+            flex-shrink: 0 !important;
+        }
+        
+        .map-container {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .map-placeholder {
+            text-align: center;
+            color: var(--muted);
+        }
+        
+        .map-placeholder svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+    </style>
+  </head>
+  <body class="sidebarAutoHide">
+    <div class="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">System Trace</div>
+          </div>
+
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/" data-action="dashboard" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="#" data-action="problems" data-label="Problems">Problems</a>
+            <a class="sideItem" href="/hosts" data-action="hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/overview" data-action="overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="#" data-action="screens" data-label="Screens">Screens</a>
+            <a class="sideItem" href="/maps" data-action="maps" data-label="Maps" aria-current="page">Maps</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Inventory</div>
+            <a class="sideItem" href="/inventory" data-action="inventory" data-label="Inventory">Inventory</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Reports</div>
+            <a class="sideItem" href="#" data-action="reports" data-label="Reports">Reports</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Configuration</div>
+            <a class="sideItem" href="#" data-action="configuration" data-label="Configuration">Configuration</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <a class="sideItem" href="/users" data-action="users" data-label="Users">Users</a>
+            <a class="sideItem" href="/user-groups" data-action="user-groups" data-label="User groups">User groups</a>
+            <a class="sideItem" href="#" onclick="refreshMaps(); return false;" data-action="refresh" data-label="Refresh">🔄 Refresh</a>
+          </div>
+        </nav>
+
+        <div class="sideBottom" aria-label="Secondary">
+          <a class="sideItem" href="#" data-action="support" data-label="Support">Support</a>
+          <a class="sideItem" href="#" data-action="share" data-label="Share">Share</a>
+          <a class="sideItem" href="#" data-action="help" data-label="Help">Help</a>
+          <a class="sideItem" href="#" data-action="settings" data-label="User settings">User settings</a>
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit" data-action="logout">Sign out</button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="content" id="content">
+        <div class="frame">
+          <div class="hud">
+            <header>
+              <div class="headLeft">
+                <button id="sideToggle" class="sideToggle" type="button" aria-label="Toggle menu" title="Menu">
+                  <span aria-hidden="true">≡</span>
+                </button>
+                <div>
+                  <div id="date" class="date">—</div>
+                  <div class="title">NETWORK MAPS</div>
+                </div>
+              </div>
+              <div class="badge">
+                <span class="dot"></span>
+                <span id="conn">connecting…</span> · <span id="host">—</span>
+            </div>
+            <div style="display: flex; gap: 8px; margin-left: 15px; position: relative; z-index: 9999;">
+                <button id="autoDiscoverIcon" onclick="startAutoDiscovery()" title="Auto Discover" 
+                        style="background: #FF0000 !important; color: #FFFFFF !important; border: 3px solid #000000 !important; padding: 12px 20px !important; border-radius: 8px !important; cursor: pointer !important; font-size: 20px !important; font-weight: bold !important; display: inline-block !important; align-items: center !important; gap: 8px !important; position: relative !important; z-index: 9999 !important; box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;">
+                    🔍 AUTO DISCOVER
+                </button>
+                <button id="refreshIcon" onclick="refreshMaps()" title="Refresh" 
+                        style="background: #00FF00 !important; color: #000000 !important; border: 3px solid #000000 !important; padding: 12px 20px !important; border-radius: 8px !important; cursor: pointer !important; font-size: 20px !important; font-weight: bold !important; display: inline-block !important; align-items: center !important; gap: 8px !important; position: relative !important; z-index: 9999 !important; box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;">
+                    🔄 REFRESH
+                </button>
+            </div>
+            </header>
+          </div>
+
+          <div class="maps-container">
+            <!-- Controls bar -->
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px; flex-wrap:wrap;">
+                <button id="autoDiscoverIcon" onclick="startAutoDiscovery()"
+                        style="background:#e53935; color:#fff; border:none; padding:10px 22px; border-radius:7px; cursor:pointer; font-size:15px; font-weight:700; box-shadow:0 2px 8px rgba(0,0,0,0.3); display:flex; align-items:center; gap:8px;">
+                    🔍 Auto Discover
+                </button>
+                <button id="refreshIcon" onclick="refreshMaps()"
+                        style="background:#2e7d32; color:#fff; border:none; padding:10px 22px; border-radius:7px; cursor:pointer; font-size:15px; font-weight:700; box-shadow:0 2px 8px rgba(0,0,0,0.3); display:flex; align-items:center; gap:8px;">
+                    🔄 Refresh
+                </button>
+                <span id="mapsStatus" style="color:#aaa; font-size:13px;"></span>
+            </div>
+
+            <!-- Legend -->
+            <div id="mapsLegend" style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; padding:12px 16px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid rgba(255,255,255,0.08);">
+                <span style="font-size:12px; color:#aaa; align-self:center; font-weight:600; margin-right:4px;">LEGEND:</span>
+                <span style="font-size:12px; display:flex; align-items:center; gap:5px;">🖥️ <span style="color:#4fc3f7;">Rack Server</span></span>
+                <span style="font-size:12px; display:flex; align-items:center; gap:5px;">🐧 <span style="color:#4fc3f7;">Linux Server</span></span>
+                <span style="font-size:12px; display:flex; align-items:center; gap:5px;">🪟 <span style="color:#4fc3f7;">Windows Server</span></span>
+                <span style="font-size:12px; display:flex; align-items:center; gap:5px;">🔀 <span style="color:#81c784;">Switch</span></span>
+                <span style="font-size:12px; display:flex; align-items:center; gap:5px;">📡 <span style="color:#ffb74d;">Router</span></span>
+                <span style="font-size:12px; display:flex; align-items:center; gap:5px;">🛡️ <span style="color:#ef5350;">Firewall</span></span>
+                <span style="font-size:12px; display:flex; align-items:center; gap:5px;">🔌 <span style="color:#ce93d8;">Patch Panel</span></span>
+                <span style="font-size:12px; display:flex; align-items:center; gap:5px;">🌐 <span style="color:#80cbc4;">Network Device</span></span>
+            </div>
+
+            <!-- Topology SVG map -->
+            <div style="background:var(--panel,#1a1a2e); border:1px solid var(--border,#333); border-radius:10px; padding:16px; margin-bottom:24px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h2 style="margin:0; font-size:16px; color:#e0e0e0;">🗺️ Network Topology</h2>
+                    <span style="font-size:12px; color:#888;">Right-click a node for options</span>
+                </div>
+                <div id="topoMapWrap" style="position:relative; width:100%; overflow:hidden; border-radius:8px; background:#0d0d1a;">
+                    <svg id="topoMapSvg" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" style="width:100%; display:block; min-height:340px;"></svg>
+                    <div id="topoMenu" style="display:none; position:absolute; background:#1e1e2e; border:1px solid #444; border-radius:6px; padding:4px 0; min-width:160px; z-index:100; box-shadow:0 4px 16px rgba(0,0,0,0.5);">
+                        <button class="topoMenuItem" id="topoMenuGoHost">Go to Host page</button>
+                        <button class="topoMenuItem" id="topoMenuCopyAddr">Copy address</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Device inventory grid -->
+            <div style="background:var(--panel,#1a1a2e); border:1px solid var(--border,#333); border-radius:10px; padding:16px; margin-bottom:24px;">
+                <h2 style="margin:0 0 16px 0; font-size:16px; color:#e0e0e0;">📋 Discovered Devices</h2>
+                <div id="deviceGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px;">
+                    <div style="color:#888; font-size:13px; grid-column:1/-1; text-align:center; padding:20px;">Loading devices…</div>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+    /* Force auto-hide behavior for this page */
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar {
+      transform: translateX(calc(-100% + 14px)) !important;
+      transition: transform 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide.sidebarHover .sidebar,
+    body.sidebarAutoHide.sidebarOpen .sidebar {
+      transform: translateX(0) !important;
+      transition: transform 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(110, 231, 255, 0.1), transparent);
+      border-right: 1px solid rgba(110, 231, 255, 0.2);
+      pointer-events: none;
+    }
+    
+    /* Ensure content adjusts properly */
+    body.sidebarAutoHide .content {
+      margin-left: 14px !important;
+      transition: margin-left 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide.sidebarHover .content,
+    body.sidebarAutoHide.sidebarOpen .content {
+      margin-left: var(--side-w, 260px) !important;
+    }
+    .topoMenuItem {
+      display: block; width: 100%; padding: 8px 16px; background: none; border: none;
+      color: #e0e0e0; font-size: 13px; text-align: left; cursor: pointer;
+    }
+    .topoMenuItem:hover { background: rgba(255,255,255,0.08); }
+  </style>
+    <script>
+      // ── Sidebar auto-hide ──────────────────────────────────────────────────
+      (function() {
+        let sidebarHover = false;
+        function initAutoHide() {
+          const sidebar = document.getElementById('sidebar');
+          if (!sidebar) return;
+          document.body.classList.add('sidebarAutoHide');
+          document.addEventListener('mousemove', function(e) {
+            const x = e.clientX;
+            if (x <= 30 && !sidebarHover) { sidebarHover = true; document.body.classList.add('sidebarHover'); }
+            else if (x > 100 && sidebarHover) { sidebarHover = false; document.body.classList.remove('sidebarHover'); }
+          }, { passive: true });
+          sidebar.addEventListener('mouseenter', () => { sidebarHover = true; document.body.classList.add('sidebarHover'); });
+          sidebar.addEventListener('mouseleave', () => { sidebarHover = false; document.body.classList.remove('sidebarHover'); });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAutoHide);
+        else initAutoHide();
+      })();
+
+      // ── Device type metadata ───────────────────────────────────────────────
+      const DEVICE_TYPE_META = {
+        'rack-server':  { icon: '🖥️',  label: 'Rack Server',    color: '#4fc3f7', nodeColor: '#1565c0' },
+        'linux':        { icon: '🐧',  label: 'Linux Server',   color: '#4fc3f7', nodeColor: '#1565c0' },
+        'windows':      { icon: '🪟',  label: 'Windows Server', color: '#4fc3f7', nodeColor: '#1565c0' },
+        'switch':       { icon: '🔀',  label: 'Network Switch', color: '#81c784', nodeColor: '#2e7d32' },
+        'router':       { icon: '📡',  label: 'Router',         color: '#ffb74d', nodeColor: '#e65100' },
+        'firewall':     { icon: '🛡️',  label: 'Firewall',       color: '#ef5350', nodeColor: '#b71c1c' },
+        'patch-panel':  { icon: '🔌',  label: 'Patch Panel',    color: '#ce93d8', nodeColor: '#6a1b9a' },
+        'network':      { icon: '🌐',  label: 'Network Device', color: '#80cbc4', nodeColor: '#00695c' },
+      };
+
+      function getDeviceMeta(type) {
+        if (!type) return { icon: '💻', label: 'Unknown', color: '#aaa', nodeColor: '#333' };
+        const key = String(type).toLowerCase().replace(/\s+/g, '-');
+        return DEVICE_TYPE_META[key] || { icon: '💻', label: String(type), color: '#aaa', nodeColor: '#333' };
+      }
+
+      // ── SVG helpers ────────────────────────────────────────────────────────
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      function svgEl(tag, attrs) {
+        const el = document.createElementNS(SVG_NS, tag);
+        if (attrs) for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+        return el;
+      }
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+      // ── State ──────────────────────────────────────────────────────────────
+      let hostsCache = [];
+      let hostStatuses = {};
+      let menuHost = null;
+
+      // ── Topology map renderer ──────────────────────────────────────────────
+      function renderTopoMap(hosts, statuses) {
+        const svg = document.getElementById('topoMapSvg');
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+        // Grid background
+        const bg = svgEl('g');
+        for (let x = 0; x <= 1000; x += 100)
+          bg.appendChild(svgEl('line', { x1: x, y1: 0, x2: x, y2: 560, stroke: 'rgba(255,255,255,0.03)', 'stroke-width': 1 }));
+        for (let y = 0; y <= 560; y += 80)
+          bg.appendChild(svgEl('line', { x1: 0, y1: y, x2: 1000, y2: y, stroke: 'rgba(255,255,255,0.03)', 'stroke-width': 1 }));
+        svg.appendChild(bg);
+
+        const cx = 500, cy = 240;
+
+        // Central server node
+        const serverNodes = [{ id: '__server__', kind: 'server', name: 'System Trace', address: 'localhost', type: 'server', x: cx, y: cy }];
+
+        // Position host nodes in a ring
+        const count = hosts.length;
+        const ringR = Math.min(220, 80 + count * 18);
+        const nodes = hosts.map((h, i) => {
+          const angle = (i / Math.max(1, count)) * Math.PI * 2 - Math.PI / 2;
+          return {
+            id: String(h.id),
+            kind: 'host',
+            name: h.name || h.address,
+            address: h.address || '',
+            type: h.type || '',
+            x: clamp(cx + ringR * Math.cos(angle), 60, 940),
+            y: clamp(cy + ringR * 0.72 * Math.sin(angle), 50, 510),
+            rawHost: h,
+          };
+        });
+
+        // Draw links
+        const linksG = svgEl('g');
+        for (const n of nodes) {
+          const st = statuses[n.id] || statuses[parseInt(n.id)];
+          const online = st && (st.status === 'ok');
+          linksG.appendChild(svgEl('line', {
+            x1: cx, y1: cy, x2: n.x, y2: n.y,
+            stroke: online ? 'rgba(76,175,80,0.35)' : 'rgba(255,255,255,0.10)',
+            'stroke-width': online ? 2 : 1,
+            'stroke-dasharray': online ? '' : '4 4',
+          }));
+        }
+        svg.appendChild(linksG);
+
+        // Draw nodes
+        const nodesG = svgEl('g');
+        svg.appendChild(nodesG);
+
+        function addNode(n) {
+          const isServer = n.kind === 'server';
+          const r = isServer ? 52 : 44;
+          const devM = isServer ? { icon: '🖧', label: 'Monitor Server', color: '#6ee7f7', nodeColor: '#0d47a1' } : getDeviceMeta(n.type);
+          const st = !isServer && (hostStatuses[n.id] || hostStatuses[parseInt(n.id)]);
+          const online = st && st.status === 'ok';
+          const statusColor = isServer ? '#6ee7f7' : (online ? '#4caf50' : (st ? '#ef5350' : '#888'));
+
+          const g = svgEl('g');
+          g.setAttribute('transform', `translate(${n.x},${n.y})`);
+          g.style.cursor = isServer ? 'default' : 'pointer';
+
+          // Outer glow ring for status
+          g.appendChild(svgEl('circle', { cx: 0, cy: 0, r: r + 4, fill: 'none', stroke: statusColor, 'stroke-width': 2, opacity: 0.4 }));
+
+          // Main circle
+          g.appendChild(svgEl('circle', { cx: 0, cy: 0, r, fill: devM.nodeColor || '#1a1a2e', stroke: statusColor, 'stroke-width': 2 }));
+
+          // Icon via foreignObject
+          const fo = svgEl('foreignObject', { x: -14, y: -r + 6, width: 28, height: 26 });
+          const iconDiv = document.createElement('div');
+          iconDiv.style.cssText = 'font-size:18px;text-align:center;line-height:1.4;user-select:none;';
+          iconDiv.textContent = devM.icon;
+          fo.appendChild(iconDiv);
+          g.appendChild(fo);
+
+          // Name text
+          const t1 = svgEl('text', { x: 0, y: 4, 'text-anchor': 'middle', fill: '#e8f4fd', 'font-size': 10, 'font-weight': '600', 'font-family': 'monospace' });
+          t1.textContent = String(n.name).slice(0, 18);
+          g.appendChild(t1);
+
+          // Address text
+          const t2 = svgEl('text', { x: 0, y: 17, 'text-anchor': 'middle', fill: 'rgba(200,230,255,0.6)', 'font-size': 8, 'font-family': 'monospace' });
+          t2.textContent = String(n.address).slice(0, 20);
+          g.appendChild(t2);
+
+          // Type label
+          const t3 = svgEl('text', { x: 0, y: 28, 'text-anchor': 'middle', fill: devM.color || '#aaa', 'font-size': 8, 'font-weight': '600' });
+          t3.textContent = (devM.label || '').toUpperCase().slice(0, 14);
+          g.appendChild(t3);
+
+          // Status dot below node
+          const dotY = r + 12;
+          const dot = svgEl('circle', { cx: 0, cy: dotY, r: 5, fill: statusColor });
+          g.appendChild(dot);
+          const dotLabel = svgEl('text', { x: 8, y: dotY + 4, fill: statusColor, 'font-size': 8 });
+          dotLabel.textContent = isServer ? 'ONLINE' : (online ? 'OK' : (st ? st.status.toUpperCase() : 'UNKNOWN'));
+          g.appendChild(dotLabel);
+
+          // Tooltip
+          const title = svgEl('title');
+          title.textContent = `${n.name}\n${n.address}\nType: ${devM.label}`;
+          g.appendChild(title);
+
+          // Context menu on right-click
+          if (!isServer) {
+            g.addEventListener('contextmenu', (evt) => {
+              evt.preventDefault();
+              menuHost = n;
+              const wrap = document.getElementById('topoMapWrap');
+              const rect = wrap.getBoundingClientRect();
+              const menu = document.getElementById('topoMenu');
+              menu.style.left = (evt.clientX - rect.left + 8) + 'px';
+              menu.style.top = (evt.clientY - rect.top + 8) + 'px';
+              menu.style.display = 'block';
+            });
+          }
+
+          nodesG.appendChild(g);
+        }
+
+        for (const n of serverNodes) addNode(n);
+        for (const n of nodes) addNode(n);
+
+        // Empty state
+        if (!count) {
+          const t = svgEl('text', { x: 500, y: 480, 'text-anchor': 'middle', fill: 'rgba(200,220,255,0.5)', 'font-size': 14 });
+          t.textContent = 'No hosts yet — click Auto Discover to scan your network.';
+          svg.appendChild(t);
+        }
+      }
+
+      // ── Device grid renderer ───────────────────────────────────────────────
+      function renderDeviceGrid(hosts, statuses) {
+        const grid = document.getElementById('deviceGrid');
+        if (!hosts.length) {
+          grid.innerHTML = '<div style="color:#888;font-size:13px;grid-column:1/-1;text-align:center;padding:30px;">No devices discovered yet. Click <strong>Auto Discover</strong> to scan your network.</div>';
+          return;
+        }
+
+        // Group by device type
+        const groups = {};
+        for (const h of hosts) {
+          const key = (h.type || 'other').toLowerCase().replace(/\s+/g, '-');
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(h);
+        }
+
+        // Sort groups: network devices first, then servers
+        const ORDER = ['firewall', 'router', 'switch', 'patch-panel', 'network', 'rack-server', 'linux', 'windows', 'other'];
+        const sortedKeys = Object.keys(groups).sort((a, b) => {
+          const ai = ORDER.indexOf(a), bi = ORDER.indexOf(b);
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+        });
+
+        grid.innerHTML = '';
+        for (const key of sortedKeys) {
+          const devM = getDeviceMeta(key);
+          const groupHosts = groups[key];
+
+          // Group header
+          const header = document.createElement('div');
+          header.style.cssText = 'grid-column:1/-1; display:flex; align-items:center; gap:8px; margin-top:8px; padding-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.08);';
+          header.innerHTML = `<span style="font-size:20px;">${devM.icon}</span><span style="color:${devM.color};font-weight:700;font-size:14px;">${devM.label}</span><span style="color:#666;font-size:12px;">(${groupHosts.length})</span>`;
+          grid.appendChild(header);
+
+          for (const h of groupHosts) {
+            const st = statuses[String(h.id)] || statuses[h.id];
+            const online = st && st.status === 'ok';
+            const statusColor = online ? '#4caf50' : (st ? '#ef5350' : '#888');
+            const statusText = online ? 'Online' : (st ? st.status.charAt(0).toUpperCase() + st.status.slice(1) : 'Unknown');
+
+            const card = document.createElement('div');
+            card.style.cssText = `background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-left:3px solid ${devM.color}; border-radius:8px; padding:12px; cursor:pointer; transition:background 0.15s;`;
+            card.innerHTML = `
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <span style="font-size:22px;">${devM.icon}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="color:#e0e0e0; font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${h.name || h.address}">${h.name || h.address}</div>
+                  <div style="color:#888; font-size:11px;">${h.address || ''}</div>
+                </div>
+                <span style="width:8px; height:8px; border-radius:50%; background:${statusColor}; flex-shrink:0;" title="${statusText}"></span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:${devM.color}; font-size:11px; font-weight:600;">${devM.label}</span>
+                <span style="color:${statusColor}; font-size:11px;">${statusText}</span>
+              </div>
+            `;
+            card.addEventListener('mouseenter', () => card.style.background = 'rgba(255,255,255,0.08)');
+            card.addEventListener('mouseleave', () => card.style.background = 'rgba(255,255,255,0.04)');
+            card.addEventListener('click', () => { window.location.href = `/host/${h.id}`; });
+            grid.appendChild(card);
+          }
+        }
+      }
+
+      // ── Load and render ────────────────────────────────────────────────────
+      async function loadAndRender() {
+        const statusEl = document.getElementById('mapsStatus');
+        statusEl.textContent = 'Loading…';
+        try {
+          const [hosts, statusData] = await Promise.all([
+            fetch('/api/hosts').then(r => r.json()),
+            fetch('/api/hosts/status').then(r => r.json()).catch(() => ({})),
+          ]);
+          hostsCache = Array.isArray(hosts) ? hosts : [];
+          hostStatuses = (statusData && statusData.statuses) ? statusData.statuses : {};
+          renderTopoMap(hostsCache, hostStatuses);
+          renderDeviceGrid(hostsCache, hostStatuses);
+          statusEl.textContent = `${hostsCache.length} device${hostsCache.length !== 1 ? 's' : ''} · updated ${new Date().toLocaleTimeString()}`;
+        } catch (e) {
+          statusEl.textContent = 'Error loading hosts: ' + (e.message || e);
+        }
+      }
+
+      // ── Context menu ───────────────────────────────────────────────────────
+      document.addEventListener('click', () => {
+        const m = document.getElementById('topoMenu');
+        if (m) m.style.display = 'none';
+      });
+
+      document.getElementById('topoMenuGoHost').addEventListener('click', () => {
+        if (menuHost && menuHost.id) window.location.href = `/host/${menuHost.id}`;
+      });
+
+      document.getElementById('topoMenuCopyAddr').addEventListener('click', async () => {
+        if (menuHost && menuHost.address) {
+          try { await navigator.clipboard.writeText(menuHost.address); } catch (_) {}
+        }
+      });
+
+      // ── Auto-discover ──────────────────────────────────────────────────────
+      async function startAutoDiscovery() {
+        const btn = document.getElementById('autoDiscoverIcon');
+        const statusEl = document.getElementById('mapsStatus');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Scanning…';
+        statusEl.textContent = 'Running network scan…';
+        try {
+          const resp = await fetch('/api/discovery/start', { method: 'POST' });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.detail || 'Discovery failed');
+          statusEl.textContent = data.message || 'Discovery complete';
+          await loadAndRender();
+        } catch (e) {
+          statusEl.textContent = 'Discovery failed: ' + (e.message || e);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '🔍 Auto Discover';
+        }
+      }
+
+      // ── Refresh ────────────────────────────────────────────────────────────
+      async function refreshMaps() {
+        const btn = document.getElementById('refreshIcon');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Refreshing…';
+        await loadAndRender();
+        btn.disabled = false;
+        btn.innerHTML = '🔄 Refresh';
+      }
+
+      // ── Init ───────────────────────────────────────────────────────────────
+      document.addEventListener('DOMContentLoaded', () => {
+        loadAndRender();
+        // Auto-refresh every 30s
+        setInterval(loadAndRender, 30000);
+      });
+    </script>
+  </body>
+</html>

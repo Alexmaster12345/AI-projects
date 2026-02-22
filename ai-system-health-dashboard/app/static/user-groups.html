@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Trace · User Groups</title>
+    <link rel="stylesheet" href="/static/assets/dashboard.css?v=20260211_2" />
+    <link rel="stylesheet" href="/static/assets/users.css?v=20260211_3" />
+    <script defer src="/static/assets/dashboard.js?v=20260211_2"></script>
+    <script defer src="/static/assets/user-groups.js?v=20260211_7"></script>
+    <style>
+    /* Force auto-hide behavior for this page */
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar {
+      transform: translateX(calc(-100% + 14px)) !important;
+      transition: transform 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide.sidebarHover .sidebar,
+    body.sidebarAutoHide.sidebarOpen .sidebar {
+      transform: translateX(0) !important;
+      transition: transform 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide:not(.sidebarHover):not(.sidebarOpen) .sidebar::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(110, 231, 255, 0.1), transparent);
+      border-right: 1px solid rgba(110, 231, 255, 0.2);
+      pointer-events: none;
+    }
+    
+    /* Ensure content adjusts properly */
+    body.sidebarAutoHide .content {
+      margin-left: 14px !important;
+      transition: margin-left 180ms ease !important;
+    }
+    
+    body.sidebarAutoHide.sidebarHover .content,
+    body.sidebarAutoHide.sidebarOpen .content {
+      margin-left: var(--side-w, 260px) !important;
+    }
+  </style>
+    <style>
+      .userSelection {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px;
+        background: var(--panel);
+      }
+      
+      .userCheckboxes {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 8px;
+        margin-top: 8px;
+      }
+      
+      .userCheckbox {
+        display: flex;
+        align-items: center;
+        padding: 6px;
+        border-radius: 4px;
+        transition: background 0.2s ease;
+      }
+      
+      .userCheckbox:hover {
+        background: rgba(110, 231, 255, 0.1);
+      }
+      
+      .userCheckbox input[type="checkbox"] {
+        margin-right: 8px;
+      }
+      
+      .userCheckbox label {
+        cursor: pointer;
+        color: var(--text);
+        font-size: 14px;
+      }
+    </style>
+    <script>
+      // Simple auto-hide sidebar implementation
+      (function() {
+        let sidebarHover = false;
+        let mouseTimer = null;
+        
+        function initAutoHide() {
+          const sidebar = document.getElementById('sidebar');
+          if (!sidebar) return;
+          
+          // Force the auto-hide class
+          document.body.classList.add('sidebarAutoHide');
+          
+          // Mouse move handler
+          function onMouseMove(e) {
+            clearTimeout(mouseTimer);
+            const x = e.clientX;
+            
+            if (x <= 30) {
+              if (!sidebarHover) {
+                sidebarHover = true;
+                document.body.classList.add('sidebarHover');
+              }
+            } else if (x > 100) {
+              if (sidebarHover) {
+                sidebarHover = false;
+                document.body.classList.remove('sidebarHover');
+              }
+            }
+          }
+          
+          // Add event listener
+          document.addEventListener('mousemove', onMouseMove, { passive: true });
+          
+          // Sidebar hover handlers
+          sidebar.addEventListener('mouseenter', function() {
+            sidebarHover = true;
+            document.body.classList.add('sidebarHover');
+          });
+          
+          sidebar.addEventListener('mouseleave', function() {
+            sidebarHover = false;
+            document.body.classList.remove('sidebarHover');
+          });
+        }
+        
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initAutoHide);
+        } else {
+          initAutoHide();
+        }
+      })();
+    </script>
+  </head>
+  <body class="sidebarAutoHide">
+    <div class="appShell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sideTop">
+          <div class="brandRow">
+            <div class="brand">System Trace</div>
+          </div>
+
+          <div class="sideSearchWrap">
+            <input id="sideSearch" class="sideSearch" placeholder="Search…" autocomplete="off" />
+          </div>
+        </div>
+
+        <nav class="sideNav" id="sideNav" aria-label="Main">
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Monitoring</div>
+            <a class="sideItem" href="/" data-action="dashboard" data-label="Dashboard">Dashboard</a>
+            <a class="sideItem" href="/overview" data-action="overview" data-label="Overview">Overview</a>
+            <a class="sideItem" href="/#hosts" data-action="hosts" data-label="Hosts">Hosts</a>
+            <a class="sideItem" href="/#maps" data-action="maps" data-label="Maps">Maps</a>
+          </div>
+
+          <div class="sideGroup">
+            <div class="sideGroupTitle">Administration</div>
+            <a class="sideItem" href="/users" data-action="users" data-label="Users">Users</a>
+            <a class="sideItem" href="/user-groups" data-action="user-groups" data-label="User groups" aria-current="page">User groups</a>
+          </div>
+        </nav>
+
+        <div class="sideBottom" aria-label="Secondary">
+          <a class="sideItem" href="/#settings" data-action="settings" data-label="User settings">User settings</a>
+          <form class="sideLogout" method="post" action="/logout">
+            <button class="sideItem sideBtn" type="submit" data-action="logout">Sign out</button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="content" id="content">
+        <div class="frame">
+              </div>
+            </header>
+          </div>
+
+          <div class="usersWrap">
+            <header class="usersHeader">
+            <div>
+              <div class="usersTitle">User Groups</div>
+              <div class="usersSub muted">Manage user groups and host permissions (DC, Labs, etc)</div>
+            </div>
+            <div class="usersBadge">
+              <span class="muted" id="userGroupsUser"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M20 21v-2a4 4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span id="userGroupsUsername">—</span></span>
+            </div>
+          </header>
+
+          <div id="userGroupsErr" class="hostsErr" role="alert" style="display:none;"></div>
+
+          <div class="usersActions">
+            <button id="addGroupBtn" class="btn btnPrimary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Group
+            </button>
+            <button id="refreshGroupsBtn" class="btn btnSecondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Refresh
+            </button>
+          </div>
+
+          <div class="usersGrid">
+            <section class="hostsCard">
+              <div class="hostsCardTitle">User Groups</div>
+              <div class="usersTableWrap">
+                <table class="usersTable" id="userGroupsTable">
+                  <thead>
+                    <tr>
+                      <th>Group Name</th>
+                      <th>Description</th>
+                      <th>Allowed Hosts</th>
+                      <th>Members</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="userGroupsTableBody">
+                    <tr>
+                      <td colspan="6" class="textCenter muted">Loading user groups...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- Add/Edit Group Modal -->
+        <div id="groupModal" class="modal" style="display: none;">
+          <div class="modalContent">
+            <div class="modalHeader">
+              <h3 id="groupModalTitle">Add User Group</h3>
+              <button class="modalClose" id="groupModalClose">&times;</button>
+            </div>
+            <form id="groupForm" class="modalBody">
+              <input type="hidden" id="groupId" name="id">
+              
+              <div class="formGroup">
+                <label for="groupName">Group Name</label>
+                <input type="text" id="groupName" name="name" required>
+              </div>
+              
+              <div class="formGroup">
+                <label for="groupDescription">Description</label>
+                <textarea id="groupDescription" name="description" rows="3"></textarea>
+              </div>
+              
+              <div class="formGroup">
+                <label for="groupUsers">Assign Users</label>
+                <div class="userSelection">
+                  <small class="muted">Select users who can access this group's resources</small>
+                  <div id="userCheckboxes" class="userCheckboxes">
+                    <!-- User checkboxes will be populated here -->
+                  </div>
+                </div>
+              </div>
+              
+              <div class="formGroup">
+                <label for="allowedHosts">Allowed Hosts</label>
+                <div class="allowedHostsHelp">
+                  <small class="muted">Enter host patterns (one per line). Examples: "DC-*", "LABS-*", "prod-web-01", "192.168.1.*"</small>
+                </div>
+                <textarea id="allowedHosts" name="allowedHosts" rows="4" placeholder="DC-*&#10;LABS-*&#10;prod-web-*"></textarea>
+              </div>
+            </form>
+            <div class="modalFooter">
+              <button type="button" class="btn btnSecondary" id="groupModalCancel">Cancel</button>
+              <button type="submit" form="groupForm" class="btn btnPrimary">Save Group</button>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

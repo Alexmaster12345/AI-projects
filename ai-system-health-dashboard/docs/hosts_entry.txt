@@ -1,0 +1,6 @@
+# Add this line to /etc/hosts to resolve centos-docker hostname
+192.168.50.225 centos-docker
+
+# This will allow both hostname and IP address to work:
+# ping centos-docker  # Will work
+# ping 192.168.50.225  # Will work

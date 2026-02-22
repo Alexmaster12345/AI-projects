@@ -1,0 +1,26 @@
+{
+  "192.168.50.81": {
+    "ip": "192.168.50.81",
+    "os_type": "unknown",
+    "commands": "# Deploy System Trace Agent to 192.168.50.81 (Unknown)\n# ================================================\n\n# Step 1: Copy agent files to host\necho \"\ud83d\udcc1 Copying agent files to 192.168.50.81...\"\nscp agents/unknown/system-trace_agent.py root@192.168.50.81:/opt/system-trace-agent/\nscp agents/unknown/deploy_unknown_agent.sh root@192.168.50.81:/tmp/\nscp agents/unknown/system-trace-agent.service root@192.168.50.81:/tmp/\nscp agents/unknown/snmpd.conf root@192.168.50.81:/tmp/\n\n# Step 2: Execute deployment script\necho \"\ud83d\ude80 Executing deployment script on 192.168.50.81...\"\nssh root@192.168.50.81 'chmod +x /tmp/deploy_unknown_agent.sh && /tmp/deploy_unknown_agent.sh'\n\n# Step 3: Verify deployment\necho \"\ud83d\udd0d Verifying deployment on 192.168.50.81...\"\nssh root@192.168.50.81 'systemctl status system-trace-agent | head -5'\nssh root@192.168.50.81 'systemctl status snmpd | head -5'\nssh root@192.168.50.81 'snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0'\n\n# Step 4: Check System Trace dashboard\necho \"\ud83c\udf10 Check System Trace dashboard: http://localhost:8001\"\necho \"   Look for 192.168.50.81 in the monitoring data\"\n",
+    "hostname": null
+  },
+  "192.168.50.89": {
+    "ip": "192.168.50.89",
+    "os_type": "unknown",
+    "commands": "# Deploy System Trace Agent to 192.168.50.89 (Unknown)\n# ================================================\n\n# Step 1: Copy agent files to host\necho \"\ud83d\udcc1 Copying agent files to 192.168.50.89...\"\nscp agents/unknown/system-trace_agent.py root@192.168.50.89:/opt/system-trace-agent/\nscp agents/unknown/deploy_unknown_agent.sh root@192.168.50.89:/tmp/\nscp agents/unknown/system-trace-agent.service root@192.168.50.89:/tmp/\nscp agents/unknown/snmpd.conf root@192.168.50.89:/tmp/\n\n# Step 2: Execute deployment script\necho \"\ud83d\ude80 Executing deployment script on 192.168.50.89...\"\nssh root@192.168.50.89 'chmod +x /tmp/deploy_unknown_agent.sh && /tmp/deploy_unknown_agent.sh'\n\n# Step 3: Verify deployment\necho \"\ud83d\udd0d Verifying deployment on 192.168.50.89...\"\nssh root@192.168.50.89 'systemctl status system-trace-agent | head -5'\nssh root@192.168.50.89 'systemctl status snmpd | head -5'\nssh root@192.168.50.89 'snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0'\n\n# Step 4: Check System Trace dashboard\necho \"\ud83c\udf10 Check System Trace dashboard: http://localhost:8001\"\necho \"   Look for 192.168.50.89 in the monitoring data\"\n",
+    "hostname": null
+  },
+  "192.168.50.1": {
+    "ip": "192.168.50.1",
+    "os_type": "unknown",
+    "commands": "# Deploy System Trace Agent to 192.168.50.1 (Unknown)\n# ================================================\n\n# Step 1: Copy agent files to host\necho \"\ud83d\udcc1 Copying agent files to 192.168.50.1...\"\nscp agents/unknown/system-trace_agent.py root@192.168.50.1:/opt/system-trace-agent/\nscp agents/unknown/deploy_unknown_agent.sh root@192.168.50.1:/tmp/\nscp agents/unknown/system-trace-agent.service root@192.168.50.1:/tmp/\nscp agents/unknown/snmpd.conf root@192.168.50.1:/tmp/\n\n# Step 2: Execute deployment script\necho \"\ud83d\ude80 Executing deployment script on 192.168.50.1...\"\nssh root@192.168.50.1 'chmod +x /tmp/deploy_unknown_agent.sh && /tmp/deploy_unknown_agent.sh'\n\n# Step 3: Verify deployment\necho \"\ud83d\udd0d Verifying deployment on 192.168.50.1...\"\nssh root@192.168.50.1 'systemctl status system-trace-agent | head -5'\nssh root@192.168.50.1 'systemctl status snmpd | head -5'\nssh root@192.168.50.1 'snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0'\n\n# Step 4: Check System Trace dashboard\necho \"\ud83c\udf10 Check System Trace dashboard: http://localhost:8001\"\necho \"   Look for 192.168.50.1 in the monitoring data\"\n",
+    "hostname": null
+  },
+  "192.168.50.198": {
+    "ip": "192.168.50.198",
+    "os_type": "rocky",
+    "commands": "# Deploy System Trace Agent to 192.168.50.198 (Rocky)\n# ================================================\n\n# Step 1: Copy agent files to host\necho \"\ud83d\udcc1 Copying agent files to 192.168.50.198...\"\nscp agents/rocky/system-trace_agent.py root@192.168.50.198:/opt/system-trace-agent/\nscp agents/rocky/deploy_rocky_agent.sh root@192.168.50.198:/tmp/\nscp agents/rocky/system-trace-agent.service root@192.168.50.198:/tmp/\nscp agents/rocky/snmpd.conf root@192.168.50.198:/tmp/\n\n# Step 2: Execute deployment script\necho \"\ud83d\ude80 Executing deployment script on 192.168.50.198...\"\nssh root@192.168.50.198 'chmod +x /tmp/deploy_rocky_agent.sh && /tmp/deploy_rocky_agent.sh'\n\n# Step 3: Verify deployment\necho \"\ud83d\udd0d Verifying deployment on 192.168.50.198...\"\nssh root@192.168.50.198 'systemctl status system-trace-agent | head -5'\nssh root@192.168.50.198 'systemctl status snmpd | head -5'\nssh root@192.168.50.198 'snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0'\n\n# Step 4: Check System Trace dashboard\necho \"\ud83c\udf10 Check System Trace dashboard: http://localhost:8001\"\necho \"   Look for 192.168.50.198 in the monitoring data\"\n",
+    "hostname": null
+  }
+}

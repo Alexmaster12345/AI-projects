@@ -1,0 +1,398 @@
+#!/usr/bin/env python3
+"""
+Fix SNMP Timeout and NTP Issues for centos-docker
+
+Direct deployment to resolve:
+- SNMP timeout (5000 ms)
+- NTP server reachability issues
+- High resource usage (agent reachability)
+"""
+
+import subprocess
+import time
+import json
+from pathlib import Path
+
+def create_direct_deployment_script():
+    """Create a direct deployment script for centos-docker."""
+    
+    script_content = '''#!/bin/bash
+# Direct Fix for centos-docker SNMP and NTP Issues
+
+set -e
+
+echo "🔧 Fixing SNMP and NTP Issues on centos-docker"
+echo "=============================================="
+
+# Variables
+HOST="192.168.50.198"
+AGENT_DIR="/opt/ashd-agent"
+
+echo "📁 Step 1: Creating agent directory on host..."
+ssh root@$HOST 'mkdir -p $AGENT_DIR'
+
+echo "📦 Step 2: Installing required packages..."
+ssh root@$HOST 'dnf update -y'
+ssh root@$HOST 'dnf install -y python3 python3-pip net-snmp net-snmp-utils chrony'
+
+echo "🐍 Step 3: Installing Python dependencies..."
+ssh root@$HOST 'python3 -m pip install psutil requests'
+
+echo "📝 Step 4: Creating ASHD agent..."
+cat << 'EOF' | ssh root@$HOST 'cat > $AGENT_DIR/ashd_agent.py'
+#!/usr/bin/env python3
+"""
+ASHD Monitoring Agent for Rocky Linux
+"""
+
+import json
+import time
+import subprocess
+import socket
+import psutil
+import platform
+import requests
+from pathlib import Path
+import os
+
+class ASHDAgent:
+    def __init__(self):
+        self.server_url = "http://192.168.50.225:8001"
+        self.hostname = socket.gethostname()
+        self.agent_id = f"{self.hostname}-{int(time.time())}"
+        self.metrics_interval = 30
+        
+    def get_system_metrics(self):
+        """Collect system metrics."""
+        try:
+            # CPU metrics
+            cpu_percent = psutil.cpu_percent(interval=1)
+            cpu_count = psutil.cpu_count()
+            
+            # Memory metrics
+            memory = psutil.virtual_memory()
+            
+            # Disk metrics
+            disk = psutil.disk_usage('/')
+            
+            # Network metrics
+            network = psutil.net_io_counters()
+            
+            # Load average
+            try:
+                load_avg = os.getloadavg()
+            except:
+                load_avg = [0, 0, 0]
+            
+            # System uptime
+            try:
+                uptime = time.time() - psutil.boot_time()
+            except:
+                uptime = 0
+            
+            metrics = {
+                'timestamp': time.time(),
+                'hostname': self.hostname,
+                'agent_id': self.agent_id,
+                'os_type': 'rocky',
+                'cpu': {
+                    'percent': cpu_percent,
+                    'count': cpu_count,
+                    'load_avg': list(load_avg)
+                },
+                'memory': {
+                    'total': memory.total,
+                    'available': memory.available,
+                    'percent': memory.percent,
+                    'used': memory.used,
+                    'free': memory.free
+                },
+                'disk': {
+                    'total': disk.total,
+                    'used': disk.used,
+                    'free': disk.free,
+                    'percent': (disk.used / disk.total) * 100
+                },
+                'network': {
+                    'bytes_sent': network.bytes_sent,
+                    'bytes_recv': network.bytes_recv,
+                    'packets_sent': network.packets_sent,
+                    'packets_recv': network.packets_recv
+                },
+                'uptime': uptime,
+                'processes': len(psutil.pids())
+            }
+            
+            return metrics
+            
+        except Exception as e:
+            print(f"Error collecting metrics: {e}")
+            return None
+    
+    def send_metrics(self, metrics):
+        """Send metrics to ASHD server."""
+        try:
+            response = requests.post(
+                f"{self.server_url}/api/agent/metrics",
+                json=metrics,
+                timeout=10
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(f"Error sending metrics: {e}")
+            return False
+    
+    def run(self):
+        """Main agent loop."""
+        print(f"ASHD Agent starting for {self.hostname}")
+        print(f"Reporting to: {self.server_url}")
+        
+        while True:
+            try:
+                metrics = self.get_system_metrics()
+                if metrics:
+                    success = self.send_metrics(metrics)
+                    if success:
+                        print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Metrics sent")
+                    else:
+                        print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Failed to send metrics")
+                
+                time.sleep(self.metrics_interval)
+                
+            except KeyboardInterrupt:
+                print("Agent stopped by user")
+                break
+            except Exception as e:
+                print(f"Agent error: {e}")
+                time.sleep(10)
+
+if __name__ == "__main__":
+    agent = ASHDAgent()
+    agent.run()
+EOF
+
+echo "⚙️  Step 5: Configuring SNMP..."
+cat << 'EOF' | ssh root@$HOST 'cat > /etc/snmp/snmpd.conf'
+# ASHD SNMP Configuration
+# Basic SNMP v2c configuration
+
+# Listen on all interfaces
+agentAddress udp:161
+
+# SNMP community strings
+com2sec readonly  public
+com2sec readwrite  private
+
+# Group definitions
+group MyROGroup v2c        readonly
+group MyRWGroup v2c        readwrite
+
+# Access control
+view all    included  .1                               80
+view system included  .iso.org.dod.internet.mgmt.mib-2.system
+
+# Access permissions
+access MyROGroup ""      any       noauth    exact  all    none   none
+access MyRWGroup ""      any       noauth    exact  all    all    none
+
+# System information
+sysLocation    "Data Center"
+sysContact     "admin@example.com"
+sysServices    72
+
+# Process monitoring
+proc httpd
+proc sendmail
+
+# Disk monitoring
+includeAllDisks 10%
+
+# Load average monitoring
+load 12 10 5
+EOF
+
+echo "⏰ Step 6: Configuring NTP..."
+cat << 'EOF' | ssh root@$HOST 'cat > /etc/chrony.conf'
+# Use public servers from the pool.ntp.org project.
+pool pool.ntp.org iburst
+
+# Record the rate at which the system clock gains/loses time.
+driftfile /var/lib/chrony/drift
+
+# Allow NTP client access from local network.
+allow 192.168.0.0/16
+
+# Serve time even if not synchronized to a time source.
+local stratum 10
+EOF
+
+echo "🔥 Step 7: Configuring firewall..."
+ssh root@$HOST 'firewall-cmd --permanent --add-port=161/udp'
+ssh root@$HOST 'firewall-cmd --permanent --add-port=123/udp'
+ssh root@$HOST 'firewall-cmd --reload'
+
+echo "🔄 Step 8: Creating systemd service..."
+cat << 'EOF' | ssh root@$HOST 'cat > /etc/systemd/system/ashd-agent.service'
+[Unit]
+Description=ASHD Monitoring Agent
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ashd-agent
+ExecStart=/usr/bin/python3 /opt/ashd-agent/ashd_agent.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "🚀 Step 9: Starting services..."
+ssh root@$HOST 'systemctl daemon-reload'
+ssh root@$HOST 'systemctl enable snmpd'
+ssh root@$HOST 'systemctl restart snmpd'
+ssh root@$HOST 'systemctl enable chronyd'
+ssh root@$HOST 'systemctl restart chronyd'
+ssh root@$HOST 'systemctl enable ashd-agent'
+ssh root@$HOST 'systemctl restart ashd-agent'
+
+echo "✅ Step 10: Verifying deployment..."
+echo ""
+echo "📊 Service Status:"
+ssh root@$HOST 'systemctl status snmpd --no-pager -l'
+echo ""
+ssh root@$HOST 'systemctl status chronyd --no-pager -l'
+echo ""
+ssh root@$HOST 'systemctl status ashd-agent --no-pager -l'
+
+echo ""
+echo "🧪 Testing SNMP:"
+ssh root@$HOST 'snmpwalk -v2c -c public localhost 1.3.6.1.2.1.1.1.0'
+
+echo ""
+echo "🕐 Checking NTP:"
+ssh root@$HOST 'chronyc sources'
+
+echo ""
+echo "🌐 Testing SNMP from ASHD server:"
+snmpwalk -v2c -c public $HOST 1.3.6.1.2.1.1.1.0
+
+echo ""
+echo "🎯 Deployment completed!"
+echo "📋 Check ASHD dashboard: http://localhost:8001"
+echo "   SNMP should show: OK · $HOST:161 responding"
+echo "   NTP should show: OK · Time synchronized"
+echo "   Agent should show: OK · Metrics reporting"
+'''
+
+    # Save the script
+    with open('fix_centos_docker_direct.sh', 'w') as f:
+        f.write(script_content)
+    
+    # Make executable
+    Path('fix_centos_docker_direct.sh').chmod(0o755)
+    
+    print("✅ Created direct deployment script: fix_centos_docker_direct.sh")
+    return 'fix_centos_docker_direct.sh'
+
+def execute_deployment():
+    """Execute the deployment script."""
+    script_path = create_direct_deployment_script()
+    
+    print(f"🚀 Executing deployment script...")
+    print("=" * 50)
+    
+    try:
+        result = subprocess.run(['./' + script_path], 
+                              capture_output=True, text=True, timeout=300)
+        
+        print(result.stdout)
+        if result.stderr:
+            print("STDERR:", result.stderr)
+        
+        if result.returncode == 0:
+            print("✅ Deployment completed successfully!")
+        else:
+            print(f"❌ Deployment failed with exit code {result.returncode}")
+            
+    except subprocess.TimeoutExpired:
+        print("❌ Deployment timed out")
+    except Exception as e:
+        print(f"❌ Deployment error: {e}")
+
+def verify_fix():
+    """Verify that the SNMP and NTP issues are resolved."""
+    print("\n🔍 Verifying SNMP and NTP fixes...")
+    print("=" * 40)
+    
+    host = "192.168.50.198"
+    
+    # Test SNMP
+    print("🐌 Testing SNMP connectivity...")
+    try:
+        result = subprocess.run(['snmpwalk', '-v2c', '-c', 'public', '-t', '3', 
+                               f'{host}:161', '1.3.6.1.2.1.1.1.0'], 
+                              capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            print("✅ SNMP responding successfully")
+            print(f"   Response: {result.stdout.strip()[:100]}...")
+        else:
+            print("❌ SNMP still failing")
+            print(f"   Error: {result.stderr}")
+    except Exception as e:
+        print(f"❌ SNMP test error: {e}")
+    
+    # Test ICMP
+    print("\n📡 Testing ICMP connectivity...")
+    try:
+        result = subprocess.run(['ping', '-c', '3', '-W', '2', host], 
+                              capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            print("✅ ICMP connectivity working")
+            for line in result.stdout.split('\n'):
+                if 'packet loss' in line.lower():
+                    print(f"   {line}")
+                elif 'avg' in line.lower():
+                    print(f"   {line}")
+        else:
+            print("❌ ICMP connectivity failed")
+    except Exception as e:
+        print(f"❌ ICMP test error: {e}")
+    
+    print(f"\n🌐 Check ASHD dashboard for final status:")
+    print(f"   http://localhost:8001")
+    print(f"   Look for:")
+    print(f"   - SNMP: OK · {host}:161 responding")
+    print(f"   - NTP: OK · Time synchronized")
+    print(f"   - Agent: OK · Metrics reporting")
+
+def main():
+    """Main function to fix SNMP and NTP issues."""
+    print("🔧 Fixing SNMP Timeout and NTP Issues")
+    print("=" * 50)
+    print("Target: centos-docker (192.168.50.198)")
+    print("Issues to resolve:")
+    print("  - SNMP timeout (5000 ms)")
+    print("  - NTP server reachability (udp/123)")
+    print("  - High resource usage (agent reachability)")
+    print("")
+    
+    # Execute deployment
+    execute_deployment()
+    
+    # Verify fixes
+    verify_fix()
+    
+    print(f"\n🎯 Next Steps:")
+    print(f"  1. Check ASHD dashboard: http://localhost:8001")
+    print(f"  2. Verify all protocols show green status")
+    print(f"  3. Monitor system metrics appearing in dashboard")
+
+if __name__ == "__main__":
+    main()
