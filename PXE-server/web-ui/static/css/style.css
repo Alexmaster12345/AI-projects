@@ -107,7 +107,21 @@ body { display: flex; }
   z-index: 50;
 }
 .topbar-title { font-size: 16px; font-weight: 700; flex: 1; }
-.topbar-actions { display: flex; gap: 8px; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
+}
+.user-badge svg { width: 14px; height: 14px; }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {

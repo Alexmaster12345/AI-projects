@@ -6,11 +6,16 @@ PXE Web UI — Upload OS images, manage boot menu entries.
 import os
 import re
 import json
+import hashlib
 import shutil
 import subprocess
 import threading
+from functools import wraps
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, Response
+from flask import (
+    Flask, render_template, request, jsonify,
+    Response, redirect, url_for, session, flash
+)
 import werkzeug
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -22,14 +27,60 @@ UPLOAD_DIR  = Path(__file__).parent / "uploads"
 SERVER_IP   = "192.168.50.225"
 MAX_CONTENT = 10 * 1024 * 1024 * 1024   # 10 GB
 
+# ── Auth Config ───────────────────────────────────────────────────────────────
+# Credentials stored as SHA-256 hashes.
+# To change password, replace the hash below with:
+#   python3 -c "import hashlib; print(hashlib.sha256(b'yourpassword').hexdigest())"
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD_HASH = hashlib.sha256(b"pxeadmin").hexdigest()  # default: pxeadmin
+SECRET_KEY = os.environ.get("PXE_SECRET_KEY", os.urandom(24).hex())
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT
+app.config["SECRET_KEY"] = SECRET_KEY
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # Progress tracking: {task_id: {"percent": 0, "status": "...", "log": []}}
 _progress: dict = {}
 _progress_lock = threading.Lock()
+
+
+# ── Auth Helpers ─────────────────────────────────────────────────────────────
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Unauthorized"}), 401
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ── Auth Routes ───────────────────────────────────────────────────────────────
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        pw_hash  = hashlib.sha256(password.encode()).hexdigest()
+        if username == ADMIN_USERNAME and pw_hash == ADMIN_PASSWORD_HASH:
+            session["logged_in"] = True
+            session["username"]  = username
+            next_url = request.form.get("next") or url_for("index")
+            return redirect(next_url)
+        error = "Invalid username or password."
+    return render_template("login.html", error=error, next=request.args.get("next", ""))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -211,16 +262,19 @@ def extract_iso_background(task_id: str, iso_path: Path, slug: str, label: str, 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route("/")
+@login_required
 def index():
     return render_template("index.html", oses=get_installed_oses(), server_ip=SERVER_IP)
 
 
 @app.route("/api/oses")
+@login_required
 def api_oses():
     return jsonify(get_installed_oses())
 
 
 @app.route("/api/upload", methods=["POST"])
+@login_required
 def api_upload():
     label   = request.form.get("label", "").strip()
     os_type = request.form.get("os_type", "rocky")  # rocky | ubuntu
@@ -255,6 +309,7 @@ def api_upload():
 
 
 @app.route("/api/progress/<task_id>")
+@login_required
 def api_progress(task_id: str):
     with _progress_lock:
         data = _progress.get(task_id, {"percent": 0, "status": "unknown", "log": []})
@@ -262,6 +317,7 @@ def api_progress(task_id: str):
 
 
 @app.route("/api/delete/<slug>", methods=["DELETE"])
+@login_required
 def api_delete(slug: str):
     slug = re.sub(r"[^a-z0-9_-]", "", slug)
     errors = []
@@ -287,11 +343,13 @@ def api_delete(slug: str):
 
 
 @app.route("/api/menu")
+@login_required
 def api_menu():
     return jsonify({"content": read_boot_menu()})
 
 
 @app.route("/api/menu", methods=["POST"])
+@login_required
 def api_menu_save():
     body = request.get_json(force=True)
     content = body.get("content", "")
@@ -300,6 +358,7 @@ def api_menu_save():
 
 
 @app.route("/api/status")
+@login_required
 def api_status():
     services = {}
     for svc in ("dnsmasq", "nginx"):
