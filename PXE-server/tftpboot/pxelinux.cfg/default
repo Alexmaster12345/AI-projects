@@ -1,0 +1,55 @@
+# =============================================================================
+# PXE Boot Menu — pxelinux.cfg/default
+# =============================================================================
+# Shown to any client that doesn't have a MAC-specific config file.
+# MAC-specific files go in pxelinux.cfg/01-aa-bb-cc-dd-ee-ff
+# =============================================================================
+
+UI menu.c32
+PROMPT 0
+
+MENU TITLE  PXE Network Boot Server
+MENU COLOR  title        * #00AAFF #000000 *
+MENU COLOR  border       * #004488 #000000 *
+MENU COLOR  sel          * #000000 #AAFF00 *
+MENU COLOR  unsel        * #FFFFFF #000000 *
+MENU COLOR  hotkey       * #FF4400 #000000 *
+MENU COLOR  tabmsg       * #AAAAAA #000000 *
+TIMEOUT 300
+TOTALTIMEOUT 6000
+
+# ---------------------------------------------------------------------------
+LABEL local
+    MENU LABEL ^Boot from local disk
+    MENU DEFAULT
+    LOCALBOOT 0
+    TIMEOUT 300
+
+# ---------------------------------------------------------------------------
+LABEL rocky9-install
+    MENU LABEL Install Rocky Linux 9 (x86_64)
+    KERNEL images/rocky9/vmlinuz
+    APPEND initrd=images/rocky9/initrd.img inst.repo=http://SERVER_IP/pxe/rocky9 inst.ks=http://SERVER_IP/ks/rocky9-ks.cfg quiet
+
+# ---------------------------------------------------------------------------
+LABEL rocky9-rescue
+    MENU LABEL Rocky Linux 9 — Rescue Mode
+    KERNEL images/rocky9/vmlinuz
+    APPEND initrd=images/rocky9/initrd.img inst.repo=http://SERVER_IP/pxe/rocky9 inst.rescue quiet
+
+# ---------------------------------------------------------------------------
+LABEL ubuntu2404-install
+    MENU LABEL Install Ubuntu 24.04 LTS (x86_64)
+    KERNEL images/ubuntu2404/vmlinuz
+    APPEND initrd=images/ubuntu2404/initrd.gz url=http://SERVER_IP/ks/ubuntu2404-preseed.cfg auto=true priority=critical quiet splash
+
+# ---------------------------------------------------------------------------
+LABEL memtest
+    MENU LABEL Memory Test (Memtest86+)
+    KERNEL images/memtest/memtest86+.bin
+    APPEND -
+
+# ---------------------------------------------------------------------------
+LABEL reboot
+    MENU LABEL Reboot machine
+    COM32 reboot.c32
