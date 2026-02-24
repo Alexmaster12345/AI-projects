@@ -2,35 +2,32 @@
 
 Boot any computer on your LAN into a Linux installer over Ethernet — no USB needed.
 
+**Server IP:** `192.168.50.225` | **Web UI:** `http://192.168.50.225:9000`
+
 ## How It Works
 
 ```
-Client Machine                   PXE Server (this machine)
-──────────────                   ──────────────────────────
+Client Machine                   PXE Server (192.168.50.225)
+──────────────                   ───────────────────────────
 BIOS/UEFI: "Boot from network"
         │
         ▼ DHCP Request (UDP 67)
         ──────────────────────► dnsmasq
-                                   │  "Your IP is 192.168.1.101"
-                                   │  "TFTP server is 192.168.1.10"
+                                   │  "Your IP is 192.168.50.x"
+                                   │  "TFTP server is 192.168.50.225"
                                    │  "Boot file: pxelinux.0"
         ◄──────────────────────────┘
         │
-        ▼ TFTP fetch pxelinux.0 (UDP 69)
-        ──────────────────────► TFTP (dnsmasq built-in)
-        ◄── pxelinux.0 ────────────┘
+        ▼ TFTP fetch pxelinux.0 + boot menu (UDP 69)
+        ──────────────────────► /var/lib/tftpboot/
         │
-        ▼ TFTP fetch boot menu
-        ──────────────────────► pxelinux.cfg/default
-        ◄── menu with OS list ──────┘
-        │
-        ▼ User picks "Rocky Linux 9"
+        ▼ User selects OS from menu
         ──────────────────────► TFTP fetch vmlinuz + initrd
         ▼
-        kernel boots, fetches installer via HTTP (port 80)
+        kernel boots, fetches installer stage2 via HTTP (port 80)
         ──────────────────────► nginx serves /var/www/pxe/
         ▼
-        OS installs automatically from kickstart file
+        OS installs automatically from kickstart/preseed file
 ```
 
 ## Stack
@@ -38,40 +35,47 @@ BIOS/UEFI: "Boot from network"
 | Component | Role |
 |-----------|------|
 | **dnsmasq** | DHCP server + TFTP server (single process) |
-| **nginx** | HTTP server — serves kernels, ISO repos, kickstart files |
+| **nginx** | HTTP server — serves ISO repos, kickstart files |
 | **syslinux/pxelinux** | PXE bootloader loaded by client over TFTP |
 | **kickstart / preseed** | Fully automated OS installation answers |
+| **Flask Web UI** | Browser-based manager at port 9000 — upload ISOs, manage boot menu |
 
 ## Supported OS Installs
 
-| OS | Type |
-|----|------|
-| Rocky Linux 9 (x86_64) | Automated via kickstart |
-| Ubuntu 24.04 LTS (x86_64) | Automated via preseed |
-| Memtest86+ | RAM diagnostic tool |
+| OS | Kickstart | Min RAM |
+|----|-----------|---------|
+| Rocky Linux 10 Minimal (x86_64) | `http/ks/rocky-10-minimum-ks.cfg` | **4 GB** |
+| Rocky Linux 9 (x86_64) | `http/ks/rocky9-ks.cfg` | 2 GB |
+| Ubuntu 24.04 LTS (x86_64) | `http/ks/ubuntu2404-preseed.cfg` | 2 GB |
+| Memtest86+ | — | — |
+
+> ⚠️ **Rocky Linux 10** embeds the entire anaconda installer (~600 MB decompressed) in the
+> initrd. The target VM needs **at least 4 GB RAM** or the installer will silently crash and
+> reboot in a loop.
+
+---
 
 ## Quick Start
 
 ### 1. Prerequisites
 
-- A Linux server connected to the same LAN as the machines you want to boot
+- Rocky Linux server connected to the same LAN as the machines you want to boot
 - Root/sudo access
-- Internet access (to download kernels)
-- Ports **67/udp** (DHCP), **69/udp** (TFTP), **80/tcp** (HTTP) must be free
+- Ports **67/udp** (DHCP), **69/udp** (TFTP), **80/tcp** (HTTP), **9000/tcp** (Web UI)
 
-> ⚠️ If your network already has a DHCP server (e.g. your router), you must either
-> disable it or configure your router to use **proxy DHCP** (option 43/66/67).
+> ⚠️ If your network already has a DHCP server (e.g. your router), disable it or configure
+> proxy DHCP (options 43/66/67).
 
 ### 2. Edit Configuration
 
 Open `setup.sh` and set the variables at the top:
 
 ```bash
-LAN_INTERFACE="eth0"          # Your LAN network interface
-SERVER_IP="192.168.1.10"      # This server's static IP
-DHCP_RANGE_START="192.168.1.100"
-DHCP_RANGE_END="192.168.1.200"
-GATEWAY="192.168.1.1"         # Your router IP
+LAN_INTERFACE="ens160"           # Your LAN network interface
+SERVER_IP="192.168.50.225"       # This server's static IP
+DHCP_RANGE_START="192.168.50.100"
+DHCP_RANGE_END="192.168.50.200"
+GATEWAY="192.168.50.1"
 ```
 
 ### 3. Run Setup
@@ -80,7 +84,7 @@ GATEWAY="192.168.1.1"         # Your router IP
 sudo bash setup.sh
 ```
 
-This installs dnsmasq + nginx + syslinux, configures everything, and starts services.
+Installs dnsmasq + nginx + syslinux, configures everything, starts services, and fixes SELinux contexts.
 
 ### 4. Download OS Kernels
 
@@ -90,36 +94,43 @@ sudo bash fetch-kernels.sh
 
 Downloads `vmlinuz` + `initrd` for Rocky 9 and Ubuntu 24.04 into `/var/lib/tftpboot/images/`.
 
-### 5. (Optional) Customise Kickstart
+### 5. Start the Web UI
 
-Edit the auto-install answer files before deploying:
+The Web UI is installed at `/opt/pxe-webui` and runs as a systemd service:
 
 ```bash
-# Rocky Linux automated install
-http/ks/rocky9-ks.cfg
-
-# Ubuntu automated install
-http/ks/ubuntu2404-preseed.cfg
+sudo systemctl start pxe-webui
+sudo systemctl enable pxe-webui
 ```
 
-At minimum, change the **password hashes** in both files.
+Open `http://<SERVER_IP>:9000` in your browser.
 
-### 6. Boot a Client
+**Default login:** `admin` / `pxeadmin`
 
-1. On the target machine: enter BIOS/UEFI → set **Network/PXE** as first boot device
-2. Boot — the machine will get an IP from dnsmasq and show the PXE menu
-3. Select your OS and press Enter
+### 6. Upload an OS ISO via Web UI
 
-### 7. Check Status
+1. Log in to the Web UI
+2. Go to **Upload** tab
+3. Select a Rocky Linux or Ubuntu ISO file
+4. The UI will extract the ISO, copy the kernel/initrd to TFTP, and add a boot menu entry automatically
+
+### 7. Boot a Client
+
+1. On the target machine: BIOS/UEFI → set **Network/PXE** as first boot device
+2. Boot — machine gets an IP, shows the PXE menu (auto-selects Rocky 10 after 60s)
+3. Installation runs fully automated via kickstart
+4. VM **powers off** when done — change boot order to Hard Disk, then power on
+
+### 8. Check Status
 
 ```bash
 sudo bash pxe-status.sh
-```
 
-Watch live boot activity:
+# Watch live PXE/DHCP/TFTP activity
+sudo tail -f /var/log/dnsmasq-pxe.log
 
-```bash
-tail -f /var/log/dnsmasq-pxe.log
+# Watch HTTP requests from installing clients
+sudo tail -f /var/log/nginx/access.log
 ```
 
 ---
@@ -128,36 +139,92 @@ tail -f /var/log/dnsmasq-pxe.log
 
 ```
 PXE-server/
-├── setup.sh                    # Main installer script
-├── fetch-kernels.sh            # Downloads OS netboot kernels
-├── pxe-status.sh               # Health check / diagnostics
+├── setup.sh                        # Main installer script
+├── fetch-kernels.sh                # Downloads OS netboot kernels
+├── pxe-status.sh                   # Health check / diagnostics
 ├── config/
-│   └── dnsmasq.conf            # Reference dnsmasq config (written by setup.sh)
+│   └── dnsmasq.conf                # Reference dnsmasq config
 ├── tftpboot/
 │   └── pxelinux.cfg/
-│       └── default             # PXE boot menu (template)
+│       └── default                 # PXE boot menu
 ├── http/
 │   └── ks/
 │       ├── rocky9-ks.cfg           # Rocky 9 kickstart
+│       ├── rocky-10-minimum-ks.cfg # Rocky 10 kickstart
 │       └── ubuntu2404-preseed.cfg  # Ubuntu 24.04 preseed
+├── web-ui/                         # Flask Web UI source
+│   ├── app.py                      # Flask application (auth + API)
+│   ├── requirements.txt
+│   ├── pxe-webui.service           # systemd unit file
+│   ├── templates/
+│   │   ├── index.html              # Main dashboard
+│   │   └── login.html              # Login page
+│   └── static/
+│       ├── css/style.css
+│       └── js/app.js
 └── docs/
     └── architecture.md
 ```
+
+**Live deployment paths:**
+
+| Source | Deployed to |
+|--------|-------------|
+| `web-ui/` | `/opt/pxe-webui/` |
+| Python venv | `/opt/pxe-webui-venv/` |
+| Boot kernels | `/var/lib/tftpboot/images/` |
+| ISO repos | `/var/www/pxe/<os-name>/` |
+| Kickstart files | `/var/www/pxe/ks/` |
+
+---
+
+## Web UI
+
+The Flask Web UI at `http://192.168.50.225:9000` provides:
+
+- **Dashboard** — server status, installed OSes, service health
+- **Upload** — drag-and-drop ISO upload with live progress bar
+- **Boot Menu** — view and edit `pxelinux.cfg/default` in the browser
+- **Delete** — remove an OS and all associated files
+
+**Authentication:** session-based login. Passwords stored as SHA-256 hashes.
+
+To change the Web UI password:
+```bash
+python3 -c "import hashlib; print(hashlib.sha256(b'yournewpassword').hexdigest())"
+# Paste the output into ADMIN_PASSWORD_HASH in /opt/pxe-webui/app.py
+sudo systemctl restart pxe-webui
+```
+
+---
+
+## SELinux Notes (Rocky Linux)
+
+SELinux is enforcing on this server. All PXE content directories must have the correct contexts:
+
+```bash
+# HTTP content (nginx)
+sudo semanage fcontext -a -t httpd_sys_content_t "/var/www/pxe(/.*)?"
+sudo restorecon -Rv /var/www/pxe
+
+# TFTP content (dnsmasq)
+sudo semanage fcontext -a -t tftpdir_t "/var/lib/tftpboot(/.*)?"
+sudo restorecon -Rv /var/lib/tftpboot
+```
+
+The Web UI runs from `/opt/pxe-webui` to avoid SELinux `user_home_t` restrictions on home directories.
 
 ---
 
 ## UEFI Support
 
-To support UEFI clients alongside BIOS, install `grub2-efi` and uncomment the UEFI lines in `config/dnsmasq.conf`:
-
 ```bash
-# Rocky Linux
 sudo dnf install -y grub2-efi-x64 shim-x64
 cp /boot/efi/EFI/rocky/grubx64.efi /var/lib/tftpboot/
 cp /boot/efi/EFI/rocky/shimx64.efi /var/lib/tftpboot/
 ```
 
-Then in `dnsmasq.conf`:
+In `dnsmasq.conf`:
 ```
 dhcp-match=set:efi-x86_64,option:client-arch,7
 dhcp-boot=tag:efi-x86_64,grubx64.efi
@@ -169,17 +236,23 @@ dhcp-boot=tag:efi-x86_64,grubx64.efi
 
 | Problem | Fix |
 |---------|-----|
-| Client gets no IP | Check `LAN_INTERFACE` in setup.sh, check if another DHCP server exists |
+| Client gets no IP | Check `LAN_INTERFACE` in setup.sh; check for conflicting DHCP server |
 | PXE ROM timeout | Ensure ports 67/udp and 69/udp are open in firewall |
 | `pxelinux.0` not found | Re-run setup.sh; check syslinux is installed |
-| Kernel download fails | Check internet access; re-run fetch-kernels.sh |
-| Install fails mid-way | Edit kickstart/preseed, ensure `SERVER_IP` was substituted correctly |
+| Files return 404 | SELinux context wrong — run `restorecon -Rv /var/www/pxe` |
+| Installer loops / reboots | Not enough RAM — Rocky 10 needs **4 GB minimum** |
+| Kickstart never fetched | Missing `inst.stage2=` or `inst.waitfornet=` in boot append line |
+| Web UI won't start | Check `sudo journalctl -u pxe-webui -n 50`; verify `/opt/pxe-webui` exists |
+| Login fails on Web UI | Default: `admin` / `pxeadmin` |
 
 ```bash
-# Restart services
-sudo systemctl restart dnsmasq nginx
+# Restart all services
+sudo systemctl restart dnsmasq nginx pxe-webui
 
-# Check for errors
+# Check logs
 sudo journalctl -u dnsmasq -n 50
 sudo journalctl -u nginx -n 50
+sudo journalctl -u pxe-webui -n 50
+sudo tail -f /var/log/dnsmasq-pxe.log
+sudo tail -f /var/log/nginx/access.log
 ```
