@@ -195,6 +195,7 @@ def create_app() -> FastAPI:
     async def register_submit(
         request: Request,
         username: str = Form(...),
+        email: str = Form(""),
         password: str = Form(...),
         password2: str = Form(...),
         db: Db = Depends(get_db),
@@ -202,12 +203,19 @@ def create_app() -> FastAPI:
         settings: Settings = Depends(get_settings),
     ) -> HTMLResponse:
         username = username.strip()
+        email = email.strip().lower() or None
         if not username:
-            return templates.TemplateResponse("register.html", {"request": request, "app_name": settings.app_name, "error": "Username is required."})
+            ctx = _base_ctx(request)
+            ctx.update({"error": "Username is required."})
+            return templates.TemplateResponse("register.html", ctx)
         if password != password2:
-            return templates.TemplateResponse("register.html", {"request": request, "app_name": settings.app_name, "error": "Passwords do not match."})
+            ctx = _base_ctx(request)
+            ctx.update({"error": "Passwords do not match."})
+            return templates.TemplateResponse("register.html", ctx)
         if len(password) < 8:
-            return templates.TemplateResponse("register.html", {"request": request, "app_name": settings.app_name, "error": "Password must be at least 8 characters."})
+            ctx = _base_ctx(request)
+            ctx.update({"error": "Password must be at least 8 characters."})
+            return templates.TemplateResponse("register.html", ctx)
 
         existing = await auth.get_user_by_username(db, username)
         if existing is not None:
@@ -215,11 +223,17 @@ def create_app() -> FastAPI:
             ctx.update({"error": "Username already exists."})
             return templates.TemplateResponse("register.html", ctx)
 
-        user = await auth.create_user(db, username, password, role="user", is_active=True)
+        if email:
+            existing_email = await auth.get_user_by_email(db, email)
+            if existing_email is not None:
+                ctx = _base_ctx(request)
+                ctx.update({"error": "An account with that email already exists."})
+                return templates.TemplateResponse("register.html", ctx)
+
+        user = await auth.create_user(db, username, password, role="user", is_active=True, email=email)
         sess = _get_session(request)
         sess.clear()
         await _refresh_session_identity(request, user)
-        # Login is enough: derive the vault key now.
         key = derive_key_from_password(password, user.enc_salt)
         keys.set(sess["sid"], user.id, key, ttl_seconds=settings.vault_unlock_ttl_seconds)
         return RedirectResponse(url="/vault", status_code=303)
@@ -229,6 +243,94 @@ def create_app() -> FastAPI:
         ctx = _base_ctx(request)
         ctx.update({"error": None})
         return templates.TemplateResponse("login.html", ctx)
+
+    # ── Forgot / Reset password ────────────────────────────────────────────────
+
+    @app.get("/forgot-password", response_class=HTMLResponse)
+    async def forgot_password_page(request: Request) -> HTMLResponse:
+        ctx = _base_ctx(request)
+        ctx.update({"error": None, "success": None, "reset_token": None, "reset_username": None})
+        return templates.TemplateResponse("forgot_password.html", ctx)
+
+    @app.post("/forgot-password", response_class=HTMLResponse)
+    async def forgot_password_submit(
+        request: Request,
+        identifier: str = Form(...),
+        db: Db = Depends(get_db),
+    ) -> HTMLResponse:
+        identifier = identifier.strip()
+        user = await auth.get_user_by_username(db, identifier)
+        if user is None and "@" in identifier:
+            user = await auth.get_user_by_email(db, identifier)
+
+        ctx = _base_ctx(request)
+        if user is None or not user.is_active:
+            # Don't reveal whether account exists — show generic message
+            ctx.update({
+                "error": None,
+                "success": "If that account exists, a reset link has been generated.",
+                "reset_token": None,
+                "reset_username": None,
+            })
+            return templates.TemplateResponse("forgot_password.html", ctx)
+
+        token = await auth.create_reset_token(db, user.id)
+        ctx.update({
+            "error": None,
+            "success": None,
+            "reset_token": token,
+            "reset_username": user.username,
+        })
+        return templates.TemplateResponse("forgot_password.html", ctx)
+
+    @app.get("/reset-password", response_class=HTMLResponse)
+    async def reset_password_page(
+        request: Request,
+        token: str = "",
+        db: Db = Depends(get_db),
+    ) -> HTMLResponse:
+        user = await auth.get_user_by_reset_token(db, token) if token else None
+        ctx = _base_ctx(request)
+        ctx.update({
+            "token": token,
+            "valid": user is not None,
+            "username": user.username if user else None,
+            "error": None,
+            "success": None,
+        })
+        return templates.TemplateResponse("reset_password.html", ctx)
+
+    @app.post("/reset-password", response_class=HTMLResponse)
+    async def reset_password_submit(
+        request: Request,
+        token: str = Form(...),
+        password: str = Form(...),
+        password2: str = Form(...),
+        db: Db = Depends(get_db),
+    ) -> HTMLResponse:
+        ctx = _base_ctx(request)
+        if password != password2:
+            user = await auth.get_user_by_reset_token(db, token)
+            ctx.update({"token": token, "valid": user is not None,
+                        "username": user.username if user else None,
+                        "error": "Passwords do not match.", "success": None})
+            return templates.TemplateResponse("reset_password.html", ctx)
+        if len(password) < 8:
+            user = await auth.get_user_by_reset_token(db, token)
+            ctx.update({"token": token, "valid": user is not None,
+                        "username": user.username if user else None,
+                        "error": "Password must be at least 8 characters.", "success": None})
+            return templates.TemplateResponse("reset_password.html", ctx)
+
+        ok = await auth.consume_reset_token(db, token, password)
+        if not ok:
+            ctx.update({"token": token, "valid": False, "username": None,
+                        "error": "Reset link is invalid or expired.", "success": None})
+            return templates.TemplateResponse("reset_password.html", ctx)
+
+        ctx.update({"token": "", "valid": False, "username": None, "error": None,
+                    "success": "Password changed successfully. You can now sign in."})
+        return templates.TemplateResponse("reset_password.html", ctx)
 
     @app.post("/login")
     async def login_submit(

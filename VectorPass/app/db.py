@@ -92,6 +92,22 @@ class Db:
                         conn.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT;")
                     if "totp_enabled" not in cols:
                         conn.execute("ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0;")
+                    if "email" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN email TEXT;")
+
+                    conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL,
+                            token TEXT NOT NULL UNIQUE,
+                            expires_at TEXT NOT NULL,
+                            used INTEGER NOT NULL DEFAULT 0,
+                            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                        );
+                        """
+                    )
             finally:
                 conn.close()
 
