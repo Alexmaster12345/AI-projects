@@ -75,11 +75,39 @@
             <button class="btn btn-success px-4" type="submit">Verify &amp; Enable</button>
           </div>
         </form>
-        <p class="text-muted small">
-          Code not working? Click <strong>↺ New QR</strong> above to generate a fresh secret, delete the old entry from your app, and scan again.
-        </p>
+        <div class="mt-3 p-2 bg-light rounded border small">
+          <strong>Cross-check:</strong> The server currently expects code
+          <span id="vpExpectedCode" class="font-monospace fw-bold text-primary">…</span>
+          <span class="text-muted">(refreshes in <span id="vpCodeTimer">—</span>s)</span>
+          <br><span class="text-muted">If your app shows the same code, it is working correctly.</span>
+        </div>
       </div>
     </div>
+
+<script>
+(function(){
+  const secret = {{ pending_secret | tojson }};
+  const el = document.getElementById('vpExpectedCode');
+  const timer = document.getElementById('vpCodeTimer');
+  if (!el || !secret) return;
+  function refresh() {
+    fetch('/settings/2fa/current-code?secret=' + encodeURIComponent(secret), {credentials:'same-origin'})
+      .then(r => r.json())
+      .then(d => {
+        if (d.current_code) {
+          el.textContent = d.current_code;
+          timer.textContent = d.seconds_remaining;
+        }
+      }).catch(() => {});
+  }
+  refresh();
+  setInterval(refresh, 5000);
+  setInterval(() => {
+    const t = parseInt(timer.textContent);
+    if (!isNaN(t) && t > 0) timer.textContent = t - 1;
+  }, 1000);
+})();
+</script>
 
     {# ── Not yet set up, 2FA disabled ── #}
     {% elif not totp_enabled %}

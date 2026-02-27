@@ -357,6 +357,24 @@ def create_app() -> FastAPI:
         })
         return templates.TemplateResponse("settings_2fa.html", ctx)
 
+    @app.get("/settings/2fa/current-code")
+    async def settings_2fa_current_code(
+        secret: str,
+        _user: auth.User = Depends(require_user),
+    ) -> dict:
+        """Debug: return what code the server currently expects for a given secret."""
+        import pyotp as _pyotp, time as _time
+        try:
+            totp = _pyotp.TOTP(secret.strip())
+            now = _time.time()
+            return {
+                "server_utc": _time.strftime("%H:%M:%S", _time.gmtime(now)),
+                "current_code": totp.now(),
+                "seconds_remaining": 30 - int(now) % 30,
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
     @app.post("/settings/2fa/enable", response_class=HTMLResponse)
     async def settings_2fa_enable(
         request: Request,
