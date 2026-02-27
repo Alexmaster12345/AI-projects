@@ -502,8 +502,9 @@ def create_app() -> FastAPI:
             # When key cache expires, send user to the fallback unlock page.
             return RedirectResponse(url="/unlock", status_code=303)
         entries = await vault.list_entries(db, user.id)
+        all_tags = sorted({t for e in entries for t in e.tags})
         ctx = _base_ctx(request)
-        ctx.update({"entries": entries})
+        ctx.update({"entries": entries, "all_tags": all_tags})
         return templates.TemplateResponse(
             "vault_list.html",
             ctx,
@@ -635,6 +636,143 @@ def create_app() -> FastAPI:
     ) -> RedirectResponse:
         await vault.delete_entry(db, user.id, entry_id)
         return RedirectResponse(url="/vault", status_code=303)
+
+    # ── Import / Export ───────────────────────────────────────────────────────
+
+    @app.get("/vault/export/json")
+    async def vault_export_json(
+        db: Db = Depends(get_db),
+        user: auth.User = Depends(require_operator),
+        key: bytes = Depends(require_vault_key),
+    ):
+        from fastapi.responses import StreamingResponse
+        entries = await vault.list_entries(db, user.id)
+        rows = []
+        for e in entries:
+            sec = await vault.get_entry_secrets(db, user.id, e.id, key)
+            password, notes = sec if sec else ("", "")
+            rows.append({
+                "site_name": e.site_name,
+                "url": e.url,
+                "username": e.login_username,
+                "password": password,
+                "notes": notes,
+                "tags": e.tags,
+            })
+        import json as _json
+        content = _json.dumps(rows, indent=2, ensure_ascii=False)
+        return StreamingResponse(
+            iter([content]),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=vectorpass-export.json"},
+        )
+
+    @app.get("/vault/export/csv")
+    async def vault_export_csv(
+        db: Db = Depends(get_db),
+        user: auth.User = Depends(require_operator),
+        key: bytes = Depends(require_vault_key),
+    ):
+        from fastapi.responses import StreamingResponse
+        import csv, io as _io
+        entries = await vault.list_entries(db, user.id)
+        buf = _io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["name", "url", "username", "password", "notes", "tags"])
+        for e in entries:
+            sec = await vault.get_entry_secrets(db, user.id, e.id, key)
+            password, notes = sec if sec else ("", "")
+            writer.writerow([e.site_name, e.url, e.login_username, password, notes, ",".join(e.tags)])
+        content = buf.getvalue()
+        return StreamingResponse(
+            iter([content]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=vectorpass-export.csv"},
+        )
+
+    @app.get("/vault/import", response_class=HTMLResponse)
+    async def vault_import_page(
+        request: Request,
+        _op: auth.User = Depends(require_operator),
+    ) -> HTMLResponse:
+        ctx = _base_ctx(request)
+        ctx.update({"error": None, "success": None})
+        return templates.TemplateResponse("vault_import.html", ctx)
+
+    @app.post("/vault/import", response_class=HTMLResponse)
+    async def vault_import_submit(
+        request: Request,
+        db: Db = Depends(get_db),
+        user: auth.User = Depends(require_operator),
+        key: bytes = Depends(require_vault_key),
+    ) -> HTMLResponse:
+        from fastapi import UploadFile, File
+        import csv, io as _io, json as _json
+        form = await request.form()
+        file: UploadFile = form.get("file")
+        if file is None:
+            ctx = _base_ctx(request)
+            ctx.update({"error": "No file uploaded.", "success": None})
+            return templates.TemplateResponse("vault_import.html", ctx)
+
+        raw = await file.read()
+        fname = (file.filename or "").lower()
+        imported = 0
+        errors = []
+
+        try:
+            if fname.endswith(".json"):
+                rows = _json.loads(raw.decode("utf-8"))
+                for i, row in enumerate(rows):
+                    try:
+                        tags = row.get("tags", [])
+                        if isinstance(tags, str):
+                            tags = [t.strip() for t in tags.split(",") if t.strip()]
+                        await vault.upsert_entry(
+                            db, user.id, key, entry_id=None,
+                            site_name=str(row.get("site_name", row.get("name", ""))).strip() or "Imported",
+                            url=str(row.get("url", "")).strip() or "https://",
+                            login_username=str(row.get("username", row.get("login_username", ""))).strip(),
+                            password=str(row.get("password", "")),
+                            notes=str(row.get("notes", "")),
+                            tags=[str(t).strip() for t in tags if str(t).strip()],
+                        )
+                        imported += 1
+                    except Exception as e:
+                        errors.append(f"Row {i+1}: {e}")
+            elif fname.endswith(".csv"):
+                reader = csv.DictReader(_io.StringIO(raw.decode("utf-8")))
+                for i, row in enumerate(reader):
+                    try:
+                        tags_raw = row.get("tags", "")
+                        tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+                        await vault.upsert_entry(
+                            db, user.id, key, entry_id=None,
+                            site_name=str(row.get("name", row.get("site_name", ""))).strip() or "Imported",
+                            url=str(row.get("url", "")).strip() or "https://",
+                            login_username=str(row.get("username", row.get("login_username", ""))).strip(),
+                            password=str(row.get("password", "")),
+                            notes=str(row.get("notes", "")),
+                            tags=tags,
+                        )
+                        imported += 1
+                    except Exception as e:
+                        errors.append(f"Row {i+1}: {e}")
+            else:
+                ctx = _base_ctx(request)
+                ctx.update({"error": "Unsupported format. Upload a .json or .csv file.", "success": None})
+                return templates.TemplateResponse("vault_import.html", ctx)
+        except Exception as e:
+            ctx = _base_ctx(request)
+            ctx.update({"error": f"Parse error: {e}", "success": None})
+            return templates.TemplateResponse("vault_import.html", ctx)
+
+        msg = f"Imported {imported} entr{'y' if imported==1 else 'ies'}."
+        if errors:
+            msg += f" {len(errors)} skipped: " + "; ".join(errors[:3])
+        ctx = _base_ctx(request)
+        ctx.update({"error": None, "success": msg})
+        return templates.TemplateResponse("vault_import.html", ctx)
 
     @app.get("/api/entries/{entry_id}/reveal")
     async def api_reveal_password(

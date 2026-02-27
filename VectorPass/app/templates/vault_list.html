@@ -2,8 +2,17 @@
 
 {% block nav_actions %}
 {% if is_operator or is_admin %}
-  <a class="btn btn-success btn-sm" href="/vault/new">New</a>
+  <a class="btn btn-success btn-sm" href="/vault/new">+ New</a>
   <a class="btn btn-outline-secondary btn-sm" href="/tokens">Tokens</a>
+  <div class="dropdown">
+    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">Import / Export</button>
+    <ul class="dropdown-menu dropdown-menu-end">
+      <li><a class="dropdown-item" href="/vault/export/json">Export JSON</a></li>
+      <li><a class="dropdown-item" href="/vault/export/csv">Export CSV</a></li>
+      <li><hr class="dropdown-divider"></li>
+      <li><a class="dropdown-item" href="/vault/import">Import</a></li>
+    </ul>
+  </div>
 {% endif %}
 <form method="post" action="/logout" class="m-0">
   <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
@@ -11,13 +20,23 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
-  <h1 class="h4 m-0">Vault</h1>
-  <input id="vpSearch" class="form-control form-control-sm" style="max-width: 320px" placeholder="Search…">
+<div class="d-flex align-items-center justify-content-between mb-2">
+  <h1 class="h4 m-0">Vault <span class="text-muted fw-normal fs-6">({{ entries|length }} entries)</span></h1>
+  <input id="vpSearch" class="form-control form-control-sm" style="max-width:300px" placeholder="Search…" autofocus>
 </div>
 
+{# ── Tag filter bar ── #}
+{% if all_tags %}
+<div class="mb-3 d-flex flex-wrap gap-1 align-items-center">
+  <span class="text-muted small me-1">Filter:</span>
+  {% for t in all_tags %}
+    <span class="badge text-bg-secondary vp-tag-filter" data-tag="{{ t }}" style="cursor:pointer">{{ t }}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if entries|length == 0 %}
-  <div class="alert alert-info">No entries yet. Click <strong>New</strong> to add your first login.</div>
+  <div class="alert alert-info">No entries yet. Click <strong>+ New</strong> to add your first login.</div>
 {% else %}
   <div class="table-responsive">
     <table class="table table-hover align-middle" id="vpTable">
@@ -27,18 +46,18 @@
           <th>URL</th>
           <th>Username</th>
           <th>Tags</th>
-          <th style="width: 1%"></th>
+          <th style="width:1%"></th>
         </tr>
       </thead>
       <tbody>
       {% for e in entries %}
         <tr>
           <td class="fw-semibold">{{ e.site_name }}</td>
-          <td><a href="{{ e.url }}" target="_blank" rel="noopener noreferrer">{{ e.url }}</a></td>
+          <td><a href="{{ e.url }}" target="_blank" rel="noopener noreferrer" class="text-truncate d-inline-block" style="max-width:220px">{{ e.url }}</a></td>
           <td>{{ e.login_username }}</td>
           <td>
             {% for t in e.tags %}
-              <span class="badge text-bg-secondary me-1">{{ t }}</span>
+              <span class="badge text-bg-secondary vp-tag-filter me-1" data-tag="{{ t }}" style="cursor:pointer">{{ t }}</span>
             {% endfor %}
           </td>
           <td class="text-end">

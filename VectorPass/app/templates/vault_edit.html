@@ -49,10 +49,17 @@
               <label class="form-label">Password</label>
               <div class="input-group">
                 <input id="vpPassword" class="form-control" type="password" name="password" required value="{{ password }}">
-                <button class="btn btn-outline-secondary" type="button" onclick="VectorPass.togglePassword('vpPassword', this)">Show</button>
+                <button id="vpShowBtn" class="btn btn-outline-secondary" type="button" onclick="VectorPass.togglePassword('vpPassword', this)">Show</button>
+                <button class="btn btn-outline-success" type="button" data-bs-toggle="modal" data-bs-target="#vpGenModal" id="vpGenBtn">Generate</button>
                 {% if mode == 'edit' %}
                 <button class="btn btn-outline-primary" type="button" data-entry-id="{{ entry.id }}" onclick="VectorPass.revealAndCopy(this)">Reveal & Copy</button>
                 {% endif %}
+              </div>
+              <div class="mt-1">
+                <div class="progress" style="height:5px">
+                  <div id="vpStrengthBar" class="progress-bar" style="width:0%;transition:width .3s,background .3s"></div>
+                </div>
+                <small id="vpStrengthText" class="fw-semibold"></small>
               </div>
               <div class="form-text">Stored encrypted.</div>
             </div>
@@ -77,6 +84,54 @@
   </div>
 </div>
 {% endblock %}
+
+<!-- Password Generator Modal -->
+<div class="modal fade" id="vpGenModal" tabindex="-1" aria-labelledby="vpGenModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="vpGenModalLabel">🔑 Password Generator</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Generated password</label>
+          <div class="input-group">
+            <input id="vpGenPreview" type="text" class="form-control font-monospace" readonly>
+            <button class="btn btn-outline-secondary" type="button" id="vpGenRefresh">↻</button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Length: <strong id="vpGenLengthVal">20</strong></label>
+          <input id="vpGenLength" type="range" class="form-range" min="8" max="64" value="20"
+                 oninput="document.getElementById('vpGenLengthVal').textContent=this.value">
+        </div>
+        <div class="row g-2">
+          <div class="col-6"><div class="form-check">
+            <input class="form-check-input" type="checkbox" id="vpGenLower" checked>
+            <label class="form-check-label" for="vpGenLower">Lowercase (a-z)</label>
+          </div></div>
+          <div class="col-6"><div class="form-check">
+            <input class="form-check-input" type="checkbox" id="vpGenUpper" checked>
+            <label class="form-check-label" for="vpGenUpper">Uppercase (A-Z)</label>
+          </div></div>
+          <div class="col-6"><div class="form-check">
+            <input class="form-check-input" type="checkbox" id="vpGenDigits" checked>
+            <label class="form-check-label" for="vpGenDigits">Numbers (0-9)</label>
+          </div></div>
+          <div class="col-6"><div class="form-check">
+            <input class="form-check-input" type="checkbox" id="vpGenSymbols">
+            <label class="form-check-label" for="vpGenSymbols">Symbols (!@#…)</label>
+          </div></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="vpGenUse">Use this password</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 {% block scripts %}
 <script src="/static/vault.js"></script>

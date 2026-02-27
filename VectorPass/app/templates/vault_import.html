@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block nav_actions %}
+  <a class="btn btn-outline-light btn-sm" href="/vault">← Vault</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-6">
+    <h2 class="mb-4">📥 Import Vault Entries</h2>
+
+    {% if success %}
+      <div class="alert alert-success">{{ success }} <a href="/vault">View vault →</a></div>
+    {% endif %}
+    {% if error %}
+      <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <p class="text-muted mb-3">Upload a <strong>.json</strong> or <strong>.csv</strong> file to import entries into your vault. Passwords will be encrypted immediately on import.</p>
+        <form method="post" action="/vault/import" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Select file</label>
+            <input class="form-control" type="file" name="file" accept=".json,.csv" required>
+            <div class="form-text">Accepted formats: <code>.json</code> (VectorPass export or array of objects) and <code>.csv</code> (with header row).</div>
+          </div>
+          <button class="btn btn-primary" type="submit">Import</button>
+          <a class="btn btn-outline-secondary ms-2" href="/vault">Cancel</a>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Expected format</div>
+      <div class="card-body">
+        <p class="mb-2 small text-muted"><strong>JSON</strong> — array of objects:</p>
+        <pre class="bg-light p-2 rounded small">[
+  {
+    "site_name": "GitHub",
+    "url": "https://github.com",
+    "username": "alice",
+    "password": "secret123",
+    "notes": "",
+    "tags": ["work", "dev"]
+  }
+]</pre>
+        <p class="mb-2 small text-muted mt-3"><strong>CSV</strong> — with header row:</p>
+        <pre class="bg-light p-2 rounded small">name,url,username,password,notes,tags
+GitHub,https://github.com,alice,secret123,,work</pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
