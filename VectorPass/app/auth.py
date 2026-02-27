@@ -109,7 +109,7 @@ def verify_totp(secret: str, code: str) -> bool:
     totp = pyotp.TOTP(secret)
     # Strip all non-digit characters (spaces, dashes, etc.)
     clean = "".join(c for c in code if c.isdigit())
-    return totp.verify(clean, valid_window=2)
+    return totp.verify(clean, valid_window=10)
 
 
 async def enable_totp(db: Db, user_id: int, secret: str) -> None:
