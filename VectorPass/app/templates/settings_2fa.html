@@ -34,27 +34,34 @@
     {# ── Setup flow: show QR after clicking "Set Up" ── #}
     {% if pending_secret and qr_uri %}
     <div class="card shadow-sm mb-4 border-primary">
-      <div class="card-header bg-primary text-white fw-semibold">
-        Step 1 — Scan this QR code
+      <div class="card-header bg-primary text-white fw-semibold d-flex justify-content-between align-items-center">
+        <span>Step 1 — Scan this QR code</span>
+        <form method="post" action="/settings/2fa/setup" class="m-0">
+          <button type="submit" class="btn btn-sm btn-outline-light">↺ New QR</button>
+        </form>
       </div>
       <div class="card-body">
-        <p class="text-muted small mb-3">
-          Open your authenticator app (Google Authenticator, Authy, 1Password, etc.)
-          and scan the QR code below, or enter the key manually.
+        <div class="alert alert-warning py-2 small mb-3">
+          ⚠️ <strong>If you have a previous VectorPass entry in your authenticator app, delete it first</strong>, then scan this new QR code.
+        </div>
+        <p class="text-muted small mb-2">
+          Open your authenticator app, <strong>delete any existing VectorPass entry</strong>, then scan the QR below or enter the key manually.
         </p>
         <div class="text-center mb-3">
-          <img src="{{ qr_uri }}" alt="TOTP QR Code" class="border rounded p-2" style="max-width:220px">
+          <img src="{{ qr_uri }}" alt="TOTP QR Code" class="border rounded p-2" style="max-width:210px">
         </div>
-        <p class="text-center text-muted small mb-1">Manual key:</p>
-        <p class="text-center font-monospace fw-bold fs-5 mb-3 user-select-all">{{ pending_secret }}</p>
+        <p class="text-center text-muted small mb-1">Or enter this key manually in your app:</p>
+        <p class="text-center font-monospace fw-bold fs-5 mb-1 user-select-all" style="letter-spacing:.15em">{{ pending_secret }}</p>
+        <p class="text-center text-muted small mb-3">Account: <strong>VectorPass</strong></p>
 
         <hr>
-        <p class="fw-semibold mb-2">Step 2 — Confirm with the code from your app</p>
+        <p class="fw-semibold mb-1">Step 2 — Enter the 6-digit code shown in your app</p>
+        <p class="text-muted small mb-2">The code refreshes every 30 seconds. Enter a <strong>fresh code</strong> (not one that's about to expire).</p>
         <form method="post" action="/settings/2fa/enable" autocomplete="off">
           <input type="hidden" name="pending_secret" value="{{ pending_secret }}">
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 mb-2">
             <input
-              class="form-control font-monospace text-center fs-5"
+              class="form-control font-monospace text-center fs-4"
               name="code"
               type="text"
               inputmode="numeric"
@@ -63,11 +70,14 @@
               placeholder="000000"
               autofocus
               required
+              style="letter-spacing:.3em"
             >
             <button class="btn btn-success px-4" type="submit">Verify &amp; Enable</button>
           </div>
-          <div class="form-text">Enter the 6-digit code shown in your app to confirm setup.</div>
         </form>
+        <p class="text-muted small">
+          Code not working? Click <strong>↺ New QR</strong> above to generate a fresh secret, delete the old entry from your app, and scan again.
+        </p>
       </div>
     </div>
 
