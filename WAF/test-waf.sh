@@ -119,7 +119,7 @@ expect_blocked "Shell command injection" \
   "$WAF_URL/?cmd=;id;whoami"
 
 expect_blocked "Backtick command injection" \
-  "$WAF_URL/?q=\`id\`"
+  "$WAF_URL/?q=%60id%60"
 
 expect_blocked "Pipe command injection" \
   "$WAF_URL/?q=test|cat+/etc/passwd"
