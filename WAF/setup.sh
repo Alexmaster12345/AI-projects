@@ -31,20 +31,38 @@ die()  { echo -e "${RED}[WAF] ERROR:${NC} $*" >&2; exit 1; }
 log "Installing build dependencies..."
 dnf install -y epel-release 2>/dev/null || true
 dnf install -y \
-  gcc gcc-c++ make automake autoconf libtool pkgconfig \
-  git curl wget pcre pcre-devel zlib zlib-devel \
-  openssl openssl-devel libxml2 libxml2-devel \
-  yajl yajl-devel libmaxminddb libmaxminddb-devel \
-  lmdb lmdb-devel ssdeep ssdeep-devel \
-  lua lua-devel libcurl libcurl-devel \
-  geoip geoip-devel \
+  gcc gcc-c++ make automake autoconf libtool pkgconfig cmake \
+  git curl wget \
+  pcre pcre-devel pcre2 pcre2-devel \
+  zlib zlib-devel \
+  openssl openssl-devel \
+  libxml2 libxml2-devel \
+  ssdeep ssdeep-devel \
+  libcurl libcurl-devel \
   nginx --skip-broken 2>/dev/null || true
 
 # --------------------------------------------------------------------------
-# 2. Build ModSecurity v3 from source
+# 2a. Build YAJL from source (yajl-devel not in Rocky Linux 9 repos)
+# --------------------------------------------------------------------------
+log "Building YAJL from source..."
+mkdir -p "$BUILD_DIR"
+cd "$BUILD_DIR"
+
+if [[ ! -d yajl ]]; then
+  git clone --depth 1 https://github.com/lloyd/yajl yajl
+fi
+cd yajl
+mkdir -p build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local
+make -j"$(nproc)"
+make install
+ldconfig
+log "YAJL installed to /usr/local"
+
+# --------------------------------------------------------------------------
+# 2b. Build ModSecurity v3 from source
 # --------------------------------------------------------------------------
 log "Building ModSecurity v3 from source..."
-mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 if [[ ! -d ModSecurity ]]; then
@@ -57,12 +75,10 @@ git submodule init
 git submodule update
 
 ./build.sh
+
+export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 ./configure --prefix=/usr/local \
-  --with-lmdb \
-  --with-lua \
-  --with-yajl \
-  --with-ssdeep \
-  --with-libmaxminddb
+  --with-yajl
 
 make -j"$(nproc)"
 make install
@@ -93,10 +109,27 @@ fi
 
 cd "$NGINX_SRC"
 
-# Get nginx configure args
-NGINX_CONFIG_ARGS=$(nginx -V 2>&1 | grep "configure arguments:" | sed 's/configure arguments: //')
+# Use minimal flags sufficient for dynamic module build
+# (avoids inheriting system-specific flags like -flto=auto, -specs=, etc.)
+NGINX_MOD_DIR=$(nginx -V 2>&1 | grep -oP -- '--modules-path=\K[^\s]+' || echo "/usr/lib64/nginx/modules")
+NGINX_PREFIX=$(nginx -V 2>&1 | grep -oP -- '--prefix=\K[^\s]+' || echo "/usr/share/nginx")
+NGINX_USER=$(nginx -V 2>&1 | grep -oP -- '--user=\K[^\s]+' || echo "nginx")
+NGINX_GROUP=$(nginx -V 2>&1 | grep -oP -- '--group=\K[^\s]+' || echo "nginx")
 
-./configure $NGINX_CONFIG_ARGS \
+./configure \
+  --prefix="$NGINX_PREFIX" \
+  --user="$NGINX_USER" \
+  --group="$NGINX_GROUP" \
+  --modules-path="$NGINX_MOD_DIR" \
+  --with-compat \
+  --with-http_ssl_module \
+  --with-http_v2_module \
+  --with-http_realip_module \
+  --with-threads \
+  --with-stream \
+  --with-stream_ssl_module \
+  --with-cc-opt="-O2 -I/usr/local/include" \
+  --with-ld-opt="-L/usr/local/lib -Wl,-rpath,/usr/local/lib" \
   --add-dynamic-module=../ModSecurity-nginx
 
 make -j"$(nproc)" modules
@@ -151,7 +184,6 @@ SecResponseBodyMimeType text/plain text/html text/xml application/json
 
 SecRequestBodyLimit 13107200
 SecRequestBodyNoFilesLimit 131072
-SecRequestBodyInMemoryLimit 131072
 SecRequestBodyLimitAction Reject
 
 SecPcreMatchLimit 100000

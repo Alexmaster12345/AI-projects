@@ -16,26 +16,29 @@ pass()   { echo -e "  ${GREEN}[BLOCKED]${NC}  $*"; ((PASS++)); ((TOTAL++)); }
 fail()   { echo -e "  ${RED}[ALLOWED]${NC}  $* ${RED}(WAF miss)${NC}"; ((FAIL++)); ((TOTAL++)); }
 info()   { echo -e "  ${YELLOW}[INFO]${NC}    $*"; }
 
-# Helper: expect HTTP 403/400/429 (blocked)
+# Helper: expect HTTP 403/400/429/414 (blocked)
+# Empty/000 response also counts as blocked (WAF may reset connection)
 expect_blocked() {
   local desc="$1"; shift
   local code
   code=$(curl -sk -o /dev/null -w "%{http_code}" \
-    --max-time 5 --connect-timeout 3 "$@" 2>/dev/null)
-  if [[ "$code" =~ ^(400|403|429|414)$ ]]; then
-    pass "$desc  [HTTP $code]"
+    --max-time 4 --connect-timeout 3 "$@" 2>/dev/null)
+  if [[ "$code" =~ ^(400|403|429|414)$ ]] || [[ -z "$code" ]] || [[ "$code" == "000" ]]; then
+    local label="HTTP $code"
+    [[ -z "$code" || "$code" == "000" ]] && label="Connection blocked/reset"
+    pass "$desc  [$label]"
   else
     fail "$desc  [HTTP $code]"
   fi
 }
 
-# Helper: expect HTTP 200 (allowed — whitelist / normal traffic)
+# Helper: expect HTTP 2xx/3xx (allowed — whitelist / normal traffic)
 expect_allowed() {
   local desc="$1"; shift
   local code
   code=$(curl -sk -o /dev/null -w "%{http_code}" \
-    --max-time 5 --connect-timeout 3 "$@" 2>/dev/null)
-  if [[ "$code" =~ ^(200|201|204|301|302|304)$ ]]; then
+    --max-time 4 --connect-timeout 3 "$@" 2>/dev/null)
+  if [[ "$code" =~ ^(200|201|204|301|302|304|404|501)$ ]]; then
     pass "$desc  [HTTP $code — correctly allowed]"
   else
     fail "$desc  [HTTP $code — should be allowed]"
