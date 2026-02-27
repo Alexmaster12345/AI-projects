@@ -146,6 +146,10 @@ window.VectorPass = {
   if (genDigits)  genDigits.addEventListener('change', refreshPreview)
   if (genSymbols) genSymbols.addEventListener('change', refreshPreview)
 
+  // Refresh preview every time the modal opens
+  const genModalEl = document.getElementById('vpGenModal')
+  if (genModalEl) genModalEl.addEventListener('show.bs.modal', refreshPreview)
+
   if (genUse) {
     genUse.addEventListener('click', function () {
       if (!genPreview) return
