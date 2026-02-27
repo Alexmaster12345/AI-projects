@@ -51,6 +51,7 @@
         <hr>
         <p class="fw-semibold mb-2">Step 2 — Confirm with the code from your app</p>
         <form method="post" action="/settings/2fa/enable" autocomplete="off">
+          <input type="hidden" name="pending_secret" value="{{ pending_secret }}">
           <div class="d-flex gap-2">
             <input
               class="form-control font-monospace text-center fs-5"

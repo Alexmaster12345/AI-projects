@@ -107,7 +107,9 @@ def get_totp_uri(secret: str, username: str, issuer: str = "VectorPass") -> str:
 
 def verify_totp(secret: str, code: str) -> bool:
     totp = pyotp.TOTP(secret)
-    return totp.verify(code.strip(), valid_window=1)
+    # Strip all non-digit characters (spaces, dashes, etc.)
+    clean = "".join(c for c in code if c.isdigit())
+    return totp.verify(clean, valid_window=2)
 
 
 async def enable_totp(db: Db, user_id: int, secret: str) -> None:

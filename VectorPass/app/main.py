@@ -347,8 +347,6 @@ def create_app() -> FastAPI:
         secret = auth.generate_totp_secret()
         uri = auth.get_totp_uri(secret, user.username)
         qr_data = _make_qr_data_uri(uri)
-        sess = _get_session(request)
-        sess["totp_pending_secret"] = secret  # held until user confirms with code
         ctx = _base_ctx(request)
         ctx.update({
             "totp_enabled": user.totp_enabled,
@@ -363,12 +361,12 @@ def create_app() -> FastAPI:
     async def settings_2fa_enable(
         request: Request,
         code: str = Form(...),
+        pending_secret: str = Form(...),
         db: Db = Depends(get_db),
         user: auth.User = Depends(require_user),
     ) -> HTMLResponse:
         """Verify the first TOTP code to confirm setup and enable 2FA."""
-        sess = _get_session(request)
-        secret = sess.get("totp_pending_secret")
+        secret = pending_secret.strip()
         if not secret:
             return RedirectResponse(url="/settings/2fa", status_code=303)
 
@@ -380,13 +378,12 @@ def create_app() -> FastAPI:
                 "totp_enabled": user.totp_enabled,
                 "pending_secret": secret,
                 "qr_uri": qr_data,
-                "error": "Invalid code — please scan again and re-enter.",
+                "error": "Invalid code — please try again.",
                 "success": None,
             })
             return templates.TemplateResponse("settings_2fa.html", ctx)
 
         await auth.enable_totp(db, user.id, secret)
-        sess.pop("totp_pending_secret", None)
         ctx = _base_ctx(request)
         ctx.update({
             "totp_enabled": True,
