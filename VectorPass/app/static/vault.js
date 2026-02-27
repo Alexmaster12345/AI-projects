@@ -154,9 +154,9 @@ window.VectorPass = {
     genUse.addEventListener('click', function () {
       if (!genPreview) return
       pwInput.value = genPreview.value
-      pwInput.type = 'text'
+      pwInput.type = 'password'
       const showBtn = document.getElementById('vpShowBtn')
-      if (showBtn) showBtn.textContent = 'Hide'
+      if (showBtn) showBtn.textContent = 'Show'
       updateStrength()
       // Close Bootstrap modal
       const modalEl = document.getElementById('vpGenModal')
