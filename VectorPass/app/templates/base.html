@@ -32,5 +32,89 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 {% block scripts %}{% endblock %}
+
+{% if username %}
+<!-- Inactivity timeout modal -->
+<div class="modal fade" id="vpIdleModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="vpIdleModalLabel" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-warning">
+      <div class="modal-header bg-warning bg-opacity-10">
+        <h5 class="modal-title" id="vpIdleModalLabel">⚠️ Session about to expire</h5>
+      </div>
+      <div class="modal-body text-center py-4">
+        <p class="mb-2">You've been inactive for a while.</p>
+        <p class="mb-3">You will be signed out in <strong id="vpIdleCountdown">30</strong> seconds.</p>
+        <button class="btn btn-primary px-4" id="vpIdleStayBtn">Stay signed in</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var IDLE_MS     = 10 * 60 * 1000;  // 10 minutes of no activity before showing warning
+  var WARNING_SEC = 30;               // seconds to count down before logging out
+
+  var idleTimer     = null;
+  var countdownTimer = null;
+  var remaining     = WARNING_SEC;
+  var modal         = null;
+
+  function getModal() {
+    if (!modal) modal = new bootstrap.Modal(document.getElementById('vpIdleModal'));
+    return modal;
+  }
+
+  function logout() {
+    var f = document.createElement('form');
+    f.method = 'POST';
+    f.action = '/logout';
+    document.body.appendChild(f);
+    f.submit();
+  }
+
+  function startCountdown() {
+    remaining = WARNING_SEC;
+    document.getElementById('vpIdleCountdown').textContent = remaining;
+    getModal().show();
+
+    countdownTimer = setInterval(function () {
+      remaining -= 1;
+      document.getElementById('vpIdleCountdown').textContent = remaining;
+      if (remaining <= 0) {
+        clearInterval(countdownTimer);
+        logout();
+      }
+    }, 1000);
+  }
+
+  function resetIdle() {
+    clearTimeout(idleTimer);
+    // If warning is showing and user interacts, dismiss it
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      getModal().hide();
+    }
+    idleTimer = setTimeout(startCountdown, IDLE_MS);
+  }
+
+  // "Stay signed in" button
+  document.getElementById('vpIdleStayBtn').addEventListener('click', function () {
+    resetIdle();
+  });
+
+  // Track any user activity
+  var EVENTS = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll', 'click'];
+  EVENTS.forEach(function (evt) {
+    document.addEventListener(evt, resetIdle, { passive: true });
+  });
+
+  // Start the idle clock
+  resetIdle();
+})();
+</script>
+{% endif %}
 </body>
 </html>
