@@ -1,34 +1,139 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
   <title>VectorPass</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; width: 320px; margin: 0; padding: 12px; }
-    .row { display: flex; gap: 8px; align-items: center; }
-    button { padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; background: #0d6efd; color: white; }
-    button.secondary { background: white; color: #111; }
-    .muted { color: #666; font-size: 12px; }
-    .status { padding: 8px; background: #f5f5f5; border-radius: 8px; margin: 10px 0; font-size: 13px; }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      width: 340px;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-size: 14px;
+    }
+
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid #313244;
+    }
+    .header-title { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+    .header-title span { font-size: 20px; }
+    .btn-icon {
+      background: none; border: none; color: #a6adc8; cursor: pointer;
+      font-size: 18px; padding: 4px 6px; border-radius: 6px;
+    }
+    .btn-icon:hover { background: #313244; color: #cdd6f4; }
+
+    /* Main area */
+    .body { padding: 12px 14px; }
+
+    /* Status bar */
+    .status {
+      font-size: 12px; color: #a6adc8; padding: 6px 10px;
+      background: #181825; border-radius: 8px; margin-bottom: 10px;
+      min-height: 28px; display: flex; align-items: center;
+    }
+    .status.ok  { color: #a6e3a1; }
+    .status.err { color: #f38ba8; }
+
+    /* Match card */
+    .match-card {
+      background: #181825; border: 1px solid #313244; border-radius: 10px;
+      padding: 12px; margin-bottom: 10px; display: none;
+    }
+    .match-site { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+    .match-user { color: #a6adc8; font-size: 12px; }
+
+    /* Buttons */
+    .btn {
+      width: 100%; padding: 9px; border: none; border-radius: 8px;
+      cursor: pointer; font-weight: 600; font-size: 14px; margin-bottom: 8px;
+    }
+    .btn-primary { background: #1e66f5; color: #fff; }
+    .btn-primary:hover { background: #1a5fe0; }
+    .btn-secondary {
+      background: #313244; color: #cdd6f4;
+      font-weight: 400;
+    }
+    .btn-secondary:hover { background: #45475a; }
+
+    /* Divider */
+    .divider {
+      display: flex; align-items: center; gap: 8px;
+      color: #585b70; font-size: 11px; margin: 8px 0;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: #313244;
+    }
+
+    /* Save form */
+    .save-form { display: none; }
+    .field { margin-bottom: 8px; }
+    .field label { display: block; font-size: 12px; color: #a6adc8; margin-bottom: 3px; }
+    .field input {
+      width: 100%; padding: 7px 9px;
+      background: #181825; border: 1px solid #313244; border-radius: 7px;
+      color: #cdd6f4; font-size: 13px;
+    }
+    .field input:focus { outline: none; border-color: #1e66f5; }
+
+    /* Footer */
+    .footer {
+      padding: 8px 14px 10px;
+      border-top: 1px solid #313244;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .footer a { color: #585b70; font-size: 12px; text-decoration: none; }
+    .footer a:hover { color: #a6adc8; }
   </style>
 </head>
 <body>
-  <div class="row" style="justify-content: space-between;">
-    <div>
-      <div style="font-weight: 700;">VectorPass</div>
-      <div class="muted">Autofill current page</div>
-    </div>
-    <button class="secondary" id="openOptions">Options</button>
+
+  <div class="header">
+    <div class="header-title"><span>🔐</span> VectorPass</div>
+    <button class="btn-icon" id="openOptions" title="Options">⚙</button>
   </div>
 
-  <div class="status" id="status">Ready.</div>
+  <div class="body">
+    <div class="status" id="status">Searching vault…</div>
 
-  <button id="fillBtn" style="width: 100%;">Find & Autofill</button>
+    <!-- Match found -->
+    <div class="match-card" id="matchCard">
+      <div class="match-site" id="matchSite"></div>
+      <div class="match-user" id="matchUser"></div>
+    </div>
 
-  <div class="muted" style="margin-top: 10px;">
-    Uses <code>/api/ext/match</code> with your API token.
+    <button class="btn btn-primary" id="fillBtn" style="display:none">⚡ Fill login</button>
+    <button class="btn btn-secondary" id="toggleSave">＋ Save credentials manually</button>
+
+    <div class="save-form" id="saveForm">
+      <div class="divider">Save to vault</div>
+      <div class="field">
+        <label>Site name</label>
+        <input id="saveSite" placeholder="GitHub">
+      </div>
+      <div class="field">
+        <label>URL</label>
+        <input id="saveUrl" placeholder="https://github.com">
+      </div>
+      <div class="field">
+        <label>Username / Email</label>
+        <input id="saveUser" placeholder="alice@example.com" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input id="savePwd" type="password" autocomplete="new-password">
+      </div>
+      <button class="btn btn-primary" id="saveBtn">Save to vault</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span id="currentHost" style="color:#585b70;font-size:12px"></span>
+    <a href="#" id="openVault">Open vault ↗</a>
   </div>
 
   <script src="popup.js"></script>

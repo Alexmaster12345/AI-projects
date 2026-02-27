@@ -1,13 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "VectorPass Autofill",
-  "version": "0.1.0",
-  "description": "Autofill logins from your VectorPass vault.",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "name": "VectorPass",
+  "version": "1.0.0",
+  "description": "Autofill and save logins from your VectorPass vault.",
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "VectorPass",
     "default_popup": "popup.html"
   },
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }
