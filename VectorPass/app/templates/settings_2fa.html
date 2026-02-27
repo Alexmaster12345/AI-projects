@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block nav_actions %}
+  <a class="btn btn-outline-secondary btn-sm" href="/vault">← Vault</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-6">
+    <h2 class="mb-4">🔐 Two-Factor Authentication</h2>
+
+    {% if success %}
+      <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {# ── Current status ── #}
+    <div class="card shadow-sm mb-4">
+      <div class="card-body d-flex align-items-center justify-content-between">
+        <div>
+          <h5 class="mb-1">Authenticator App</h5>
+          <p class="text-muted mb-0 small">TOTP codes via Google Authenticator, Authy, etc.</p>
+        </div>
+        {% if totp_enabled %}
+          <span class="badge bg-success fs-6 px-3 py-2">Enabled</span>
+        {% else %}
+          <span class="badge bg-secondary fs-6 px-3 py-2">Disabled</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── Setup flow: show QR after clicking "Set Up" ── #}
+    {% if pending_secret and qr_uri %}
+    <div class="card shadow-sm mb-4 border-primary">
+      <div class="card-header bg-primary text-white fw-semibold">
+        Step 1 — Scan this QR code
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Open your authenticator app (Google Authenticator, Authy, 1Password, etc.)
+          and scan the QR code below, or enter the key manually.
+        </p>
+        <div class="text-center mb-3">
+          <img src="{{ qr_uri }}" alt="TOTP QR Code" class="border rounded p-2" style="max-width:220px">
+        </div>
+        <p class="text-center text-muted small mb-1">Manual key:</p>
+        <p class="text-center font-monospace fw-bold fs-5 mb-3 user-select-all">{{ pending_secret }}</p>
+
+        <hr>
+        <p class="fw-semibold mb-2">Step 2 — Confirm with the code from your app</p>
+        <form method="post" action="/settings/2fa/enable" autocomplete="off">
+          <div class="d-flex gap-2">
+            <input
+              class="form-control font-monospace text-center fs-5"
+              name="code"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]{6}"
+              maxlength="6"
+              placeholder="000000"
+              autofocus
+              required
+            >
+            <button class="btn btn-success px-4" type="submit">Verify &amp; Enable</button>
+          </div>
+          <div class="form-text">Enter the 6-digit code shown in your app to confirm setup.</div>
+        </form>
+      </div>
+    </div>
+
+    {# ── Not yet set up, 2FA disabled ── #}
+    {% elif not totp_enabled %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <p>Add an extra layer of security to your account. After enabling, you will be asked for a
+           6-digit code from your authenticator app every time you log in.</p>
+        <form method="post" action="/settings/2fa/setup">
+          <button class="btn btn-primary" type="submit">Set Up Two-Factor Authentication</button>
+        </form>
+      </div>
+    </div>
+
+    {# ── Already enabled ── #}
+    {% else %}
+    <div class="card shadow-sm mb-4 border-danger">
+      <div class="card-header text-danger fw-semibold">Disable Two-Factor Authentication</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Enter a valid code from your authenticator app to confirm disabling 2FA.
+        </p>
+        <form method="post" action="/settings/2fa/disable" autocomplete="off">
+          <div class="d-flex gap-2">
+            <input
+              class="form-control font-monospace text-center fs-5"
+              name="code"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]{6}"
+              maxlength="6"
+              placeholder="000000"
+              required
+            >
+            <button class="btn btn-danger px-4" type="submit">Disable 2FA</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

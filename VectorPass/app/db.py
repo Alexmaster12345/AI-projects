@@ -88,6 +88,10 @@ class Db:
                         conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';")
                     if "is_active" not in cols:
                         conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;")
+                    if "totp_secret" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT;")
+                    if "totp_enabled" not in cols:
+                        conn.execute("ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0;")
             finally:
                 conn.close()
 

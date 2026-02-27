@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import base64
+import io
 import secrets
 from pathlib import Path
 
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
+import qrcode
+import qrcode.image.svg
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -248,10 +252,182 @@ def create_app() -> FastAPI:
 
         sess = _get_session(request)
         sess.clear()
+
+        # If 2FA is enabled, stash pending state and redirect to challenge
+        if user.totp_enabled and user.totp_secret:
+            sess["2fa_pending_user_id"] = user.id
+            # Derive and cache the vault key now — released only after 2FA passes
+            key = derive_key_from_password(password, user.enc_salt)
+            pending_sid = _new_session_id()
+            sess["2fa_pending_sid"] = pending_sid
+            keys.set(pending_sid, user.id, key, ttl_seconds=300)  # 5-min window
+            return RedirectResponse(url="/2fa", status_code=303)
+
         await _refresh_session_identity(request, user)
         key = derive_key_from_password(password, user.enc_salt)
         keys.set(sess["sid"], user.id, key, ttl_seconds=settings.vault_unlock_ttl_seconds)
         return RedirectResponse(url="/vault", status_code=303)
+
+    @app.get("/2fa", response_class=HTMLResponse)
+    async def totp_challenge_page(request: Request) -> HTMLResponse:
+        sess = _get_session(request)
+        if not sess.get("2fa_pending_user_id"):
+            return RedirectResponse(url="/login", status_code=303)
+        ctx = _base_ctx(request)
+        ctx.update({"error": None})
+        return templates.TemplateResponse("2fa.html", ctx)
+
+    @app.post("/2fa")
+    async def totp_challenge_submit(
+        request: Request,
+        code: str = Form(...),
+        db: Db = Depends(get_db),
+        keys: VaultKeyCache = Depends(get_keys),
+        settings: Settings = Depends(get_settings),
+    ) -> HTMLResponse:
+        sess = _get_session(request)
+        pending_uid = sess.get("2fa_pending_user_id")
+        pending_sid = sess.get("2fa_pending_sid")
+        if not isinstance(pending_uid, int) or not isinstance(pending_sid, str):
+            return RedirectResponse(url="/login", status_code=303)
+
+        user = await auth.get_user_by_id(db, pending_uid)
+        if user is None or not user.totp_enabled or not user.totp_secret:
+            return RedirectResponse(url="/login", status_code=303)
+
+        if not auth.verify_totp(user.totp_secret, code):
+            ctx = _base_ctx(request)
+            ctx.update({"error": "Invalid code. Please try again."})
+            return templates.TemplateResponse("2fa.html", ctx)
+
+        # Retrieve the pre-derived vault key from the temporary slot
+        vault_key = keys.get(pending_sid, pending_uid)
+        keys.clear(pending_sid)  # remove temp slot
+
+        # Promote to real session
+        sess.pop("2fa_pending_user_id", None)
+        sess.pop("2fa_pending_sid", None)
+        await _refresh_session_identity(request, user)
+
+        if vault_key is not None:
+            keys.set(sess["sid"], user.id, vault_key, ttl_seconds=settings.vault_unlock_ttl_seconds)
+        return RedirectResponse(url="/vault", status_code=303)
+
+    # ── 2FA Settings ──────────────────────────────────────────────────────────
+
+    def _make_qr_data_uri(uri: str) -> str:
+        """Render a TOTP provisioning URI as a base64 PNG data URI."""
+        img = qrcode.make(uri)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return f"data:image/png;base64,{b64}"
+
+    @app.get("/settings/2fa", response_class=HTMLResponse)
+    async def settings_2fa_page(
+        request: Request,
+        user: auth.User = Depends(require_user),
+    ) -> HTMLResponse:
+        ctx = _base_ctx(request)
+        ctx.update({
+            "totp_enabled": user.totp_enabled,
+            "pending_secret": None,
+            "qr_uri": None,
+            "error": None,
+            "success": None,
+        })
+        return templates.TemplateResponse("settings_2fa.html", ctx)
+
+    @app.post("/settings/2fa/setup", response_class=HTMLResponse)
+    async def settings_2fa_setup(
+        request: Request,
+        user: auth.User = Depends(require_user),
+    ) -> HTMLResponse:
+        """Generate a new TOTP secret and show the QR code for scanning."""
+        secret = auth.generate_totp_secret()
+        uri = auth.get_totp_uri(secret, user.username)
+        qr_data = _make_qr_data_uri(uri)
+        sess = _get_session(request)
+        sess["totp_pending_secret"] = secret  # held until user confirms with code
+        ctx = _base_ctx(request)
+        ctx.update({
+            "totp_enabled": user.totp_enabled,
+            "pending_secret": secret,
+            "qr_uri": qr_data,
+            "error": None,
+            "success": None,
+        })
+        return templates.TemplateResponse("settings_2fa.html", ctx)
+
+    @app.post("/settings/2fa/enable", response_class=HTMLResponse)
+    async def settings_2fa_enable(
+        request: Request,
+        code: str = Form(...),
+        db: Db = Depends(get_db),
+        user: auth.User = Depends(require_user),
+    ) -> HTMLResponse:
+        """Verify the first TOTP code to confirm setup and enable 2FA."""
+        sess = _get_session(request)
+        secret = sess.get("totp_pending_secret")
+        if not secret:
+            return RedirectResponse(url="/settings/2fa", status_code=303)
+
+        if not auth.verify_totp(secret, code):
+            uri = auth.get_totp_uri(secret, user.username)
+            qr_data = _make_qr_data_uri(uri)
+            ctx = _base_ctx(request)
+            ctx.update({
+                "totp_enabled": user.totp_enabled,
+                "pending_secret": secret,
+                "qr_uri": qr_data,
+                "error": "Invalid code — please scan again and re-enter.",
+                "success": None,
+            })
+            return templates.TemplateResponse("settings_2fa.html", ctx)
+
+        await auth.enable_totp(db, user.id, secret)
+        sess.pop("totp_pending_secret", None)
+        ctx = _base_ctx(request)
+        ctx.update({
+            "totp_enabled": True,
+            "pending_secret": None,
+            "qr_uri": None,
+            "error": None,
+            "success": "Two-factor authentication is now enabled.",
+        })
+        return templates.TemplateResponse("settings_2fa.html", ctx)
+
+    @app.post("/settings/2fa/disable", response_class=HTMLResponse)
+    async def settings_2fa_disable(
+        request: Request,
+        code: str = Form(...),
+        db: Db = Depends(get_db),
+        user: auth.User = Depends(require_user),
+    ) -> HTMLResponse:
+        """Disable 2FA after confirming with a valid TOTP code."""
+        if not user.totp_enabled or not user.totp_secret:
+            return RedirectResponse(url="/settings/2fa", status_code=303)
+        if not auth.verify_totp(user.totp_secret, code):
+            ctx = _base_ctx(request)
+            ctx.update({
+                "totp_enabled": True,
+                "pending_secret": None,
+                "qr_uri": None,
+                "error": "Invalid code. 2FA not disabled.",
+                "success": None,
+            })
+            return templates.TemplateResponse("settings_2fa.html", ctx)
+
+        await auth.disable_totp(db, user.id)
+        ctx = _base_ctx(request)
+        ctx.update({
+            "totp_enabled": False,
+            "pending_secret": None,
+            "qr_uri": None,
+            "error": None,
+            "success": "Two-factor authentication has been disabled.",
+        })
+        return templates.TemplateResponse("settings_2fa.html", ctx)
 
     @app.post("/logout")
     async def logout(request: Request, keys: VaultKeyCache = Depends(get_keys)) -> RedirectResponse:

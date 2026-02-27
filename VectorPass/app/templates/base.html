@@ -15,6 +15,9 @@
       {% if username %}
         <span class="navbar-text text-light small d-none d-md-inline">{{ username }}{% if is_admin %} (admin){% endif %}</span>
       {% endif %}
+      {% if username %}
+        <a class="btn btn-outline-light btn-sm" href="/settings/2fa">🔐 2FA</a>
+      {% endif %}
       {% if is_admin %}
         <a class="btn btn-outline-info btn-sm" href="/admin/users">Admin</a>
       {% endif %}
