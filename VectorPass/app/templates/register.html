@@ -1,39 +1,157 @@
-{% extends "base.html" %}
-
-{% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-6 col-lg-5">
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
-        <h1 class="h4 mb-3">Create account</h1>
-        {% if error %}
-          <div class="alert alert-danger" role="alert">{{ error }}</div>
-        {% endif %}
-        <form method="post" action="/register">
-          <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input class="form-control" name="username" autocomplete="username" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Email <span class="text-muted fw-normal">(optional — used for password reset)</span></label>
-            <input class="form-control" type="email" name="email" autocomplete="email" placeholder="you@example.com">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Password</label>
-            <input class="form-control" type="password" name="password" autocomplete="new-password" required>
-            <div class="form-text">At least 8 characters.</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Confirm password</label>
-            <input class="form-control" type="password" name="password2" autocomplete="new-password" required>
-          </div>
-          <button class="btn btn-success w-100" type="submit">Create account</button>
-        </form>
-        <div class="mt-3 text-center">
-          <a href="/login">Back to sign in</a>
-        </div>
-      </div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create account — {{ app_name }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      background: #0f0f17;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: #cdd6f4; padding: 24px;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 55% 45% at 30% 10%, rgba(99,102,241,.16) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 90%, rgba(30,102,245,.1) 0%, transparent 60%);
+    }
+    .card {
+      position: relative; width: 100%; max-width: 440px;
+      background: #1e1e2e; border: 1px solid #313244; border-radius: 18px;
+      padding: 38px 36px 30px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04) inset;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 2px;
+      background: linear-gradient(90deg, #6366f1, #1e66f5, #06b6d4);
+      border-radius: 0 0 4px 4px;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+    .logo-icon {
+      width: 38px; height: 38px; flex-shrink: 0;
+      background: linear-gradient(135deg, #6366f1, #1e66f5);
+      border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .logo-text { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+    .logo-sub  { font-size: 12px; color: #585b70; margin-top: 1px; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; letter-spacing: -.3px; }
+    .subtitle { font-size: 13px; color: #6c7086; margin-bottom: 22px; }
+    .error-box {
+      background: rgba(243,139,168,.1); border: 1px solid rgba(243,139,168,.3);
+      color: #f38ba8; border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+    }
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block; font-size: 11px; font-weight: 600; color: #a6adc8;
+      margin-bottom: 5px; letter-spacing: .4px; text-transform: uppercase;
+    }
+    .field .hint { font-size: 11px; color: #585b70; margin-top: 4px; }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 14px; pointer-events: none; opacity: .45;
+    }
+    .field input {
+      width: 100%; padding: 10px 13px 10px 36px;
+      background: #181825; border: 1px solid #313244; border-radius: 9px;
+      color: #cdd6f4; font-size: 14px; outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .field input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.18); }
+    .field input::placeholder { color: #45475a; }
+    .toggle-pw {
+      position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: #585b70; cursor: pointer; font-size: 12px;
+      padding: 2px 5px; border-radius: 4px;
+    }
+    .toggle-pw:hover { color: #a6adc8; }
+    .btn-submit {
+      width: 100%; padding: 11px; margin-top: 6px;
+      background: linear-gradient(135deg, #6366f1, #1e66f5);
+      border: none; border-radius: 10px; color: #fff;
+      font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: .1px;
+      box-shadow: 0 4px 20px rgba(99,102,241,.35);
+      transition: opacity .15s, transform .1s;
+    }
+    .btn-submit:hover  { opacity: .92; }
+    .btn-submit:active { transform: scale(.98); }
+    .links { text-align: center; margin-top: 18px; font-size: 13px; }
+    .links a { color: #6c7086; text-decoration: none; transition: color .15s; }
+    .links a:hover { color: #cdd6f4; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">🔐</div>
+    <div>
+      <div class="logo-text">{{ app_name }}</div>
+      <div class="logo-sub">Password vault</div>
     </div>
   </div>
+
+  <h1>Create account</h1>
+  <p class="subtitle">Start securing your credentials</p>
+
+  {% if error %}
+  <div class="error-box">⚠ {{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/register" autocomplete="on">
+    <div class="field">
+      <label>Username</label>
+      <div class="input-wrap">
+        <span class="input-icon">👤</span>
+        <input name="username" type="text" autocomplete="username" placeholder="choose a username" required autofocus>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Email <span style="font-weight:400;color:#45475a;text-transform:none;letter-spacing:0">(optional)</span></label>
+      <div class="input-wrap">
+        <span class="input-icon">✉</span>
+        <input name="email" type="email" autocomplete="email" placeholder="you@example.com">
+      </div>
+      <div class="hint">Used for password reset only.</div>
+    </div>
+
+    <div class="field">
+      <label>Password</label>
+      <div class="input-wrap">
+        <span class="input-icon">🔑</span>
+        <input id="pw1" name="password" type="password" autocomplete="new-password" placeholder="••••••••" minlength="8" required>
+        <button type="button" class="toggle-pw" onclick="togglePw('pw1',this)">Show</button>
+      </div>
+      <div class="hint">At least 8 characters.</div>
+    </div>
+
+    <div class="field">
+      <label>Confirm password</label>
+      <div class="input-wrap">
+        <span class="input-icon">🔑</span>
+        <input id="pw2" name="password2" type="password" autocomplete="new-password" placeholder="••••••••" minlength="8" required>
+        <button type="button" class="toggle-pw" onclick="togglePw('pw2',this)">Show</button>
+      </div>
+    </div>
+
+    <button class="btn-submit" type="submit">Create account →</button>
+  </form>
+
+  <div class="links">
+    <a href="/login">← Already have an account? Sign in</a>
+  </div>
 </div>
-{% endblock %}
+<script>
+function togglePw(id, btn) {
+  var el = document.getElementById(id);
+  if (el.type === 'password') { el.type = 'text';     btn.textContent = 'Hide'; }
+  else                        { el.type = 'password'; btn.textContent = 'Show'; }
+}
+</script>
+</body>
+</html>

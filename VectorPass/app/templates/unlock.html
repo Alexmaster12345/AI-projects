@@ -1,30 +1,127 @@
-{% extends "base.html" %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unlock vault — {{ app_name }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #0f0f17; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: #cdd6f4; padding: 24px;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 55% 45% at 50% 0%, rgba(30,102,245,.15) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 10% 80%, rgba(99,102,241,.1) 0%, transparent 60%);
+    }
+    .card {
+      position: relative; width: 100%; max-width: 400px;
+      background: #1e1e2e; border: 1px solid #313244; border-radius: 18px;
+      padding: 40px 36px 32px; text-align: center;
+      box-shadow: 0 24px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04) inset;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 2px;
+      background: linear-gradient(90deg, #1e66f5, #6366f1, #06b6d4);
+      border-radius: 0 0 4px 4px;
+    }
+    .vault-icon {
+      width: 68px; height: 68px; margin: 0 auto 20px;
+      background: linear-gradient(135deg, #181825, #313244);
+      border: 2px solid #1e66f5; border-radius: 16px;
+      display: flex; align-items: center; justify-content: center; font-size: 30px;
+      box-shadow: 0 0 28px rgba(30,102,245,.25);
+    }
+    h1 { font-size: 21px; font-weight: 700; margin-bottom: 6px; }
+    .subtitle { font-size: 13px; color: #6c7086; margin-bottom: 26px; line-height: 1.5; }
+    .error-box {
+      background: rgba(243,139,168,.1); border: 1px solid rgba(243,139,168,.3);
+      color: #f38ba8; border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; margin-bottom: 18px; text-align: left;
+    }
+    .field { margin-bottom: 16px; text-align: left; }
+    .field label {
+      display: block; font-size: 11px; font-weight: 600; color: #a6adc8;
+      margin-bottom: 6px; letter-spacing: .4px; text-transform: uppercase;
+    }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 14px; pointer-events: none; opacity: .45;
+    }
+    .field input {
+      width: 100%; padding: 11px 38px 11px 36px;
+      background: #181825; border: 1px solid #313244; border-radius: 9px;
+      color: #cdd6f4; font-size: 14px; outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .field input:focus {
+      border-color: #1e66f5;
+      box-shadow: 0 0 0 3px rgba(30,102,245,.18), 0 0 16px rgba(30,102,245,.12);
+    }
+    .field input::placeholder { color: #45475a; }
+    .toggle-pw {
+      position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: #585b70; cursor: pointer; font-size: 12px;
+      padding: 2px 5px; border-radius: 4px;
+    }
+    .toggle-pw:hover { color: #a6adc8; }
+    .btn-submit {
+      width: 100%; padding: 12px; margin-top: 6px;
+      background: linear-gradient(135deg, #1e66f5, #6366f1);
+      border: none; border-radius: 10px; color: #fff;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 4px 20px rgba(30,102,245,.35);
+      transition: opacity .15s, transform .1s;
+    }
+    .btn-submit:hover  { opacity: .92; }
+    .btn-submit:active { transform: scale(.98); }
+    .logout-link { margin-top: 18px; font-size: 13px; }
+    .logout-link form { display: inline; }
+    .logout-link button {
+      background: none; border: none; color: #6c7086; cursor: pointer;
+      font-size: 13px; padding: 0; text-decoration: underline;
+      font-family: inherit;
+    }
+    .logout-link button:hover { color: #a6adc8; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="vault-icon">🔒</div>
+  <h1>Vault is locked</h1>
+  <p class="subtitle">Enter your password to decrypt<br>and access your credentials.</p>
 
-{% block nav_actions %}
-<form method="post" action="/logout" class="m-0">
-  <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
-</form>
-{% endblock %}
+  {% if error %}
+  <div class="error-box">⚠ {{ error }}</div>
+  {% endif %}
 
-{% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-6 col-lg-5">
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
-        <h1 class="h4 mb-2">Unlock vault</h1>
-        <p class="text-muted mb-3">Enter your password to decrypt your stored credentials.</p>
-        {% if error %}
-          <div class="alert alert-danger" role="alert">{{ error }}</div>
-        {% endif %}
-        <form method="post" action="/unlock">
-          <div class="mb-3">
-            <label class="form-label">Password</label>
-            <input class="form-control" type="password" name="password" autocomplete="current-password" required autofocus>
-          </div>
-          <button class="btn btn-primary w-100" type="submit">Unlock</button>
-        </form>
+  <form method="post" action="/unlock">
+    <div class="field">
+      <label>Master password</label>
+      <div class="input-wrap">
+        <span class="input-icon">🔑</span>
+        <input id="pw" name="password" type="password"
+               autocomplete="current-password" placeholder="••••••••" required autofocus>
+        <button type="button" class="toggle-pw" onclick="
+          var el=document.getElementById('pw');
+          if(el.type==='password'){el.type='text';this.textContent='Hide';}
+          else{el.type='password';this.textContent='Show';}
+        ">Show</button>
       </div>
     </div>
+    <button class="btn-submit" type="submit">🔓 Unlock vault</button>
+  </form>
+
+  <div class="logout-link">
+    Not you? &nbsp;
+    <form method="post" action="/logout">
+      <button type="submit">Sign out</button>
+    </form>
   </div>
 </div>
-{% endblock %}
+</body>
+</html>
