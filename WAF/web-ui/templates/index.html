@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WAF Dashboard</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">🛡️</span>
+      <span class="logo-text">WAF Dashboard</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-tab="overview">
+        <span class="nav-icon">📊</span> Overview
+      </a>
+      <a href="#" class="nav-item" data-tab="events">
+        <span class="nav-icon">⚡</span> Live Events
+      </a>
+      <a href="#" class="nav-item" data-tab="rules">
+        <span class="nav-icon">📋</span> Rules
+      </a>
+      <a href="#" class="nav-item" data-tab="logs">
+        <span class="nav-icon">📄</span> Logs
+      </a>
+      <a href="#" class="nav-item" data-tab="test">
+        <span class="nav-icon">🧪</span> Test Suite
+      </a>
+    </nav>
+    <div class="sidebar-status">
+      <div class="status-dot" id="nginxDot"></div>
+      <span id="nginxStatusLabel">Checking...</span>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <header class="topbar">
+      <h1 class="page-title" id="pageTitle">Overview</h1>
+      <div class="topbar-actions">
+        <span class="uptime-badge" id="uptimeBadge">Uptime: —</span>
+        <div class="engine-control">
+          <label>Engine:</label>
+          <select id="engineMode">
+            <option value="On">On (Block)</option>
+            <option value="DetectionOnly">Detect Only</option>
+            <option value="Off">Off</option>
+          </select>
+          <button class="btn btn-sm btn-primary" id="applyEngine">Apply</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Overview Tab ── -->
+    <div class="tab-content active" id="tab-overview">
+      <!-- Stat cards -->
+      <div class="cards">
+        <div class="card card-red">
+          <div class="card-label">Blocked</div>
+          <div class="card-value" id="statBlocked">—</div>
+        </div>
+        <div class="card card-green">
+          <div class="card-label">Allowed</div>
+          <div class="card-value" id="statAllowed">—</div>
+        </div>
+        <div class="card card-blue">
+          <div class="card-label">Rules Loaded</div>
+          <div class="card-value" id="statRules">—</div>
+        </div>
+        <div class="card card-yellow">
+          <div class="card-label">Block Rate</div>
+          <div class="card-value" id="statRate">—</div>
+        </div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <h3>Blocked Requests — Last 24h</h3>
+          <canvas id="hourlyChart"></canvas>
+        </div>
+        <div class="chart-card chart-card-sm">
+          <h3>Attack Types</h3>
+          <canvas id="typeChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Top IPs -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Top Attacking IPs</h3>
+        </div>
+        <table class="data-table" id="topIpsTable">
+          <thead><tr><th>#</th><th>IP Address</th><th>Blocked Requests</th><th>Bar</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Events Tab ── -->
+    <div class="tab-content" id="tab-events">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Live Request Feed</h3>
+          <div class="panel-controls">
+            <button class="btn btn-sm btn-outline" id="filterAll">All</button>
+            <button class="btn btn-sm btn-red" id="filterBlocked">Blocked</button>
+            <button class="btn btn-sm btn-green" id="filterAllowed">Allowed</button>
+            <button class="btn btn-sm btn-outline" id="pauseBtn">⏸ Pause</button>
+          </div>
+        </div>
+        <div class="events-table-wrap">
+          <table class="data-table events-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>IP</th>
+                <th>Status</th>
+                <th>URI</th>
+              </tr>
+            </thead>
+            <tbody id="eventsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Rules Tab ── -->
+    <div class="tab-content" id="tab-rules">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Custom WAF Rules</h3>
+          <span class="badge" id="ruleCount">0 rules</span>
+        </div>
+        <table class="data-table" id="rulesTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Tag</th>
+              <th>Description</th>
+              <th>Variables</th>
+              <th>Operator (truncated)</th>
+            </tr>
+          </thead>
+          <tbody id="rulesTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Logs Tab ── -->
+    <div class="tab-content" id="tab-logs">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Access Log</h3>
+          <div class="panel-controls">
+            <button class="btn btn-sm btn-outline" id="refreshAccessLog">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="log-viewer" id="accessLogViewer"></div>
+      </div>
+      <div class="panel" style="margin-top:1rem">
+        <div class="panel-header">
+          <h3>ModSecurity Audit Log</h3>
+          <div class="panel-controls">
+            <button class="btn btn-sm btn-outline" id="refreshAuditLog">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="log-viewer" id="auditLogViewer"></div>
+      </div>
+    </div>
+
+    <!-- ── Test Suite Tab ── -->
+    <div class="tab-content" id="tab-test">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Attack Simulation Test Suite</h3>
+          <button class="btn btn-primary" id="runTestBtn">▶ Run Tests</button>
+        </div>
+        <div class="test-info">
+          Runs <code>test-waf.sh</code> against <code>http://localhost</code> and shows live results.
+        </div>
+        <div class="log-viewer" id="testOutput" style="min-height:400px"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
